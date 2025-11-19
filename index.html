@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CesiumJS - Orbiting Satellites</title>
+  <!--
+    File: index.html
+    Project: KesslerSimdrome (Frontend)
+    Purpose:
+      Entry point for the CesiumJS-based orbit visualization UI.
+      Loads Cesium, global styles, and the main JavaScript logic.
+    Author: Phuc "Roy" Hoang (Frontend), Team KesslerSimdrome
+    Dependencies:
+      - CesiumJS 1.121 (CDN)
+      - style.css
+      - main.js
+    Notes:
+      This file should be served via HTTP (e.g., python -m http.server).
+      Opening via file:// is not supported due to Cesium resource loading.
+  -->
+  <!-- Cesium -->
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.121/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+
+  <!-- styles -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <!-- main logic -->
+  <script src="main.js"></script>
+</body>
+</html>
