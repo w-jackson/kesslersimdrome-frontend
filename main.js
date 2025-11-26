@@ -150,7 +150,7 @@ async function loadAndRenderTrajectories() {
         // CRITICAL FOR FILTERS TO WORK
         properties: new Cesium.PropertyBag({
           id: traj.id,
-          type: traj.type,       // e.g. "PAYLOAD"
+          type: traj.type_field,       // e.g. "PAYLOAD"
           country: traj.country  // e.g. "US"
         })
       });
