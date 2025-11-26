@@ -105,12 +105,12 @@ async function loadAndRenderTrajectories() {
       traj.samples.forEach(sample => {
         const t = Cesium.JulianDate.fromIso8601(sample.t);
         // It is easier to have lat/lon/alt in the JSON, lat and lon in degrees, alt in meters
-        // const cart = Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.alt);
-        const cart = new Cesium.Cartesian3(
-          sample.x * 1000,  // km → m
-          sample.y * 1000,
-          sample.z * 1000
-        );
+        const cart = Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.alt);
+        // const cart = new Cesium.Cartesian3(
+        //   sample.x * 1000,  // km → m
+        //   sample.y * 1000,
+        //   sample.z * 1000
+        // );
         pos.addSample(t, cart);
       });
 
