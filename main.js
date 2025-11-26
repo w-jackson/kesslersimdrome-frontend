@@ -78,7 +78,7 @@ viewer.scene.light = new Cesium.SunLight();
 async function loadAndRenderTrajectories() {
  try {
     // Load trajectory JSON 
-    const res = await fetch("seed/trajectories.json");
+    const res = await fetch("http://localhost:3000/api/v1/satellites");
     const data = await res.json();
 
     console.log("Loaded trajectory data:", data);
