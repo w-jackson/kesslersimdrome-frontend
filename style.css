@@ -52,3 +52,17 @@ html, body, #cesiumContainer {
   background: #333;
   margin: 8px 0;
 }
+
+.ksd-logo-icon {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.ksd-filter-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  pointer-events: none;
+}

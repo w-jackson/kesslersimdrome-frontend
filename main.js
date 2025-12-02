@@ -214,7 +214,7 @@ const toolbar = viewer.container.querySelector(".cesium-viewer-toolbar");
 const filterBtn = document.createElement("button");
 filterBtn.className = "cesium-button cesium-toolbar-button";
 filterBtn.title = "Filter satellites";
-filterBtn.textContent = "Filter";
+filterBtn.innerHTML = '<img src="/assets/filter_logo.png" class="ksd-filter-icon">';
 toolbar.appendChild(filterBtn);
 
 const panel = document.createElement("div");
@@ -322,3 +322,11 @@ panel.addEventListener("change", ev => {
 
 // Initialize counts
 applyFilters();
+
+// Kessler Syndrome Simulation button (no functionality yet)
+const ksdButton = document.createElement("button");
+ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
+ksdButton.title = "Simulate Kessler Syndrome";
+ksdButton.innerHTML = `<img src="/assets/ksd_logo.png" class="ksd-logo-icon">`;
+toolbar.appendChild(ksdButton);
+
