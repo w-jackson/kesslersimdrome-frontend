@@ -92,7 +92,7 @@ async function loadAndRenderTrajectories() {
     viewer.clock.stopTime  = stop.clone();
     viewer.clock.currentTime = start.clone();
     viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-    viewer.clock.multiplier = 1;
+    viewer.clock.multiplier = 1; // adjust default speed here
     viewer.timeline.zoomTo(start, stop);
 
     // Render each object
@@ -130,7 +130,7 @@ async function loadAndRenderTrajectories() {
         model: {
           uri: modelUri,
           scale: 200,
-          minimumPixelSize: 20
+          minimumPixelSize:  20 // Adjust the size of objects here
         },
         path: {
           resolution: 1,
@@ -217,7 +217,7 @@ const toolbar = viewer.container.querySelector(".cesium-viewer-toolbar");
 const filterBtn = document.createElement("button");
 filterBtn.className = "cesium-button cesium-toolbar-button";
 filterBtn.title = "Filter satellites";
-filterBtn.innerHTML = '<img src="/assets/filter_logo.png" class="ksd-filter-icon">';
+filterBtn.innerHTML = '<img src="assets/filter_logo.png" class="ksd-filter-icon">';
 toolbar.appendChild(filterBtn);
 
 const panel = document.createElement("div");
@@ -332,6 +332,6 @@ applyFilters();
 const ksdButton = document.createElement("button");
 ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
 ksdButton.title = "Simulate Kessler Syndrome";
-ksdButton.innerHTML = `<img src="/assets/ksd_logo.png" class="ksd-logo-icon">`;
+ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
 toolbar.appendChild(ksdButton);
 
