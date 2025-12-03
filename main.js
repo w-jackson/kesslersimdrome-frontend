@@ -5,7 +5,7 @@
  *   Initialize the Cesium viewer, load satellite/debris trajectories from JSON/API,
  *   render 3D models and orbit paths, and provide filtering and timeline control.
  *
- * Author: Phuc "Roy" Hoang (Frontend), Team KesslerSimdrome
+ * Author: Phuc "Roy" Hoang (Frontend) & Rishab Dixit, Team KesslerSimdrome
  *
  * Dependencies:
  *   - CesiumJS (global Cesium object)
@@ -114,11 +114,8 @@ async function loadAndRenderTrajectories() {
         pos.addSample(t, cart);
       });
 
-      // Choose a model
-      let modelUri = "assets/scrap_sat.glb";
-      if (traj.type_field == "Active")
-        modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
-
+      // Choose a model (rotate through list)
+      const modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
 
       // Add Cesium entity
       viewer.entities.add({
@@ -172,6 +169,22 @@ viewer.camera.setView({
   destination: Cesium.Cartesian3.fromDegrees(0, 0, 15000000)
 });
 
+// --- Snap multiplier ONLY after user stops dragging the speed slider ---
+viewer.clock.onTick.addEventListener(() => {
+    const anim = viewer.animation;
+    if (!anim || !anim.viewModel) return;
+
+    // Don't change anything while the user is dragging the slider
+    if (anim.viewModel.scrubbing) return;
+
+    const m = viewer.clock.multiplier;
+    const snapped = Math.round(m);
+
+    if (m !== snapped) {
+        viewer.clock.multiplier = snapped;
+    }
+});
+
 /**
  * -------------------------------------------------------------------------
  * Filter System (Type & Country Filters)
@@ -214,6 +227,44 @@ viewer.camera.setView({
  */
 
 const toolbar = viewer.container.querySelector(".cesium-viewer-toolbar");
+
+// --- Allow user to type a custom time speed by double-clicking the Cesium clock ---
+const animationWidget = viewer.animation;
+if (animationWidget && animationWidget.container) {
+  animationWidget.container.addEventListener("dblclick", () => {
+
+    const current = viewer.clock.multiplier;
+
+    const input = window.prompt(
+      "Enter an integer time speed (-1000 to 1000, cannot be 0):",
+      String(current)
+    );
+    if (input === null) return; // User cancelled
+
+    // Parse integer only
+    const value = Number.parseInt(input, 10);
+
+    // Reject if input was not a clean integer
+    if (!Number.isFinite(value) || String(value) !== input.trim()) {
+      window.alert("Please enter a valid INTEGER (no decimals).");
+      return;
+    }
+
+    // Range validation
+    if (value === 0) {
+      window.alert("Speed cannot be 0.");
+      return;
+    }
+    if (value < -1000 || value > 1000) {
+      window.alert("Value must be between -1000 and 1000.");
+      return;
+    }
+
+    // Passed validation → apply multiplier
+    viewer.clock.multiplier = value;
+  });
+}
+
 const filterBtn = document.createElement("button");
 filterBtn.className = "cesium-button cesium-toolbar-button";
 filterBtn.title = "Filter satellites";
@@ -222,22 +273,20 @@ toolbar.appendChild(filterBtn);
 
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
-// TODO: Add a country checkbox option for unknown country(Objects without country info aren't. popping up on the frontend after filers are applied). 
 panel.innerHTML = `
   <h4>Filters</h4>
   <div class="ksd-filter-row"><strong>Type</strong>
-    <label><input type="checkbox" class="f-type" value="Active" checked>Satellite</label>
-    <label><input type="checkbox" class="f-type" value="Junk" checked>Debris</label>
+    <label><input type="checkbox" class="f-type" value="PAYLOAD" checked> PAYLOAD</label>
+    <label><input type="checkbox" class="f-type" value="DEBRIS" checked> DEBRIS</label>
+    <label><input type="checkbox" class="f-type" value="ROCKET BODY" checked> ROCKET BODY</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-filter-row"><strong>Country</strong>
-    <label><input type="checkbox" class="f-country" value="United States" checked>United States</label>
-    <label><input type="checkbox" class="f-country" value="United Kingdom" checked>United Kingdom</label>
-    <label><input type="checkbox" class="f-country" value="France" checked>France</label>
-    <label><input type="checkbox" class="f-country" value="Japan" checked>Japan</label>
-    <label><input type="checkbox" class="f-country" value="Italy" checked>Italy</label>
-    <label><input type="checkbox" class="f-country" value="Soviet Union" checked>Soviet Union</label>
-    <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
+    <label><input type="checkbox" class="f-country" value="US" checked> US</label>
+    <label><input type="checkbox" class="f-country" value="RU" checked> RU</label>
+    <label><input type="checkbox" class="f-country" value="CN" checked> CN</label>
+    <label><input type="checkbox" class="f-country" value="EU" checked> EU</label>
+    <label><input type="checkbox" class="f-country" value="JP" checked> JP</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-counter">Visible: <span id="ksd-visible">0</span> / <span id="ksd-total">0</span></div>
