@@ -92,7 +92,7 @@ async function loadAndRenderTrajectories() {
     viewer.clock.stopTime  = stop.clone();
     viewer.clock.currentTime = start.clone();
     viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-    viewer.clock.multiplier = 60;
+    viewer.clock.multiplier = 1;
     viewer.timeline.zoomTo(start, stop);
 
     // Render each object
@@ -114,8 +114,11 @@ async function loadAndRenderTrajectories() {
         pos.addSample(t, cart);
       });
 
-      // Choose a model (rotate through list)
-      const modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
+      // Choose a model
+      let modelUri = "assets/scrap_sat.glb";
+      if (traj.type_field == "Active")
+        modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
+
 
       // Add Cesium entity
       viewer.entities.add({
@@ -127,7 +130,7 @@ async function loadAndRenderTrajectories() {
         model: {
           uri: modelUri,
           scale: 200,
-          minimumPixelSize: 64
+          minimumPixelSize: 20
         },
         path: {
           resolution: 1,
@@ -219,20 +222,22 @@ toolbar.appendChild(filterBtn);
 
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
+// TODO: Add a country checkbox option for unknown country(Objects without country info aren't. popping up on the frontend after filers are applied). 
 panel.innerHTML = `
   <h4>Filters</h4>
   <div class="ksd-filter-row"><strong>Type</strong>
-    <label><input type="checkbox" class="f-type" value="PAYLOAD" checked> PAYLOAD</label>
-    <label><input type="checkbox" class="f-type" value="DEBRIS" checked> DEBRIS</label>
-    <label><input type="checkbox" class="f-type" value="ROCKET BODY" checked> ROCKET BODY</label>
+    <label><input type="checkbox" class="f-type" value="Active" checked>Satellite</label>
+    <label><input type="checkbox" class="f-type" value="Junk" checked>Debris</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-filter-row"><strong>Country</strong>
-    <label><input type="checkbox" class="f-country" value="US" checked> US</label>
-    <label><input type="checkbox" class="f-country" value="RU" checked> RU</label>
-    <label><input type="checkbox" class="f-country" value="CN" checked> CN</label>
-    <label><input type="checkbox" class="f-country" value="EU" checked> EU</label>
-    <label><input type="checkbox" class="f-country" value="JP" checked> JP</label>
+    <label><input type="checkbox" class="f-country" value="United States" checked>United States</label>
+    <label><input type="checkbox" class="f-country" value="United Kingdom" checked>United Kingdom</label>
+    <label><input type="checkbox" class="f-country" value="France" checked>France</label>
+    <label><input type="checkbox" class="f-country" value="Japan" checked>Japan</label>
+    <label><input type="checkbox" class="f-country" value="Italy" checked>Italy</label>
+    <label><input type="checkbox" class="f-country" value="Soviet Union" checked>Soviet Union</label>
+    <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-counter">Visible: <span id="ksd-visible">0</span> / <span id="ksd-total">0</span></div>
