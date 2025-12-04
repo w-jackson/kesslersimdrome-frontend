@@ -276,17 +276,18 @@ panel.className = "ksd-filter-panel";
 panel.innerHTML = `
   <h4>Filters</h4>
   <div class="ksd-filter-row"><strong>Type</strong>
-    <label><input type="checkbox" class="f-type" value="PAYLOAD" checked> PAYLOAD</label>
-    <label><input type="checkbox" class="f-type" value="DEBRIS" checked> DEBRIS</label>
-    <label><input type="checkbox" class="f-type" value="ROCKET BODY" checked> ROCKET BODY</label>
+    <label><input type="checkbox" class="f-type" value="Active" checked>Satellite</label>
+    <label><input type="checkbox" class="f-type" value="Junk" checked>Debris</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-filter-row"><strong>Country</strong>
-    <label><input type="checkbox" class="f-country" value="US" checked> US</label>
-    <label><input type="checkbox" class="f-country" value="RU" checked> RU</label>
-    <label><input type="checkbox" class="f-country" value="CN" checked> CN</label>
-    <label><input type="checkbox" class="f-country" value="EU" checked> EU</label>
-    <label><input type="checkbox" class="f-country" value="JP" checked> JP</label>
+    <label><input type="checkbox" class="f-country" value="United States" checked>United States</label>
+    <label><input type="checkbox" class="f-country" value="United Kingdom" checked>United Kingdom</label>
+    <label><input type="checkbox" class="f-country" value="France" checked>France</label>
+    <label><input type="checkbox" class="f-country" value="Japan" checked>Japan</label>
+    <label><input type="checkbox" class="f-country" value="Italy" checked>Italy</label>
+    <label><input type="checkbox" class="f-country" value="Soviet Union" checked>Soviet Union</label>
+    <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-counter">Visible: <span id="ksd-visible">0</span> / <span id="ksd-total">0</span></div>
