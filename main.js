@@ -114,8 +114,11 @@ async function loadAndRenderTrajectories() {
         pos.addSample(t, cart);
       });
 
-      // Choose a model (rotate through list)
-      const modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
+      // Choose a model
+      let modelUri = "assets/scrap_sat.glb";
+      if (traj.type_field == "Active")
+        modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
+
 
       // Add Cesium entity
       viewer.entities.add({
