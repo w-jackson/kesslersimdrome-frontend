@@ -116,7 +116,9 @@ async function loadAndRenderTrajectories() {
 
       // Choose a model
       let modelUri = "assets/scrap_sat.glb";
-      if (traj.type_field == "Active")
+      if(traj.id == 20580) // Object is the hubble telescope. 
+        modelUri = "assets/hubble.glb";
+      else if (traj.type_field == "Active")
         modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
 
 
