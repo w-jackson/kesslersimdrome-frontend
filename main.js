@@ -54,6 +54,25 @@ const satelliteModelUrlList = [
 viewer.scene.globe.enableLighting = true;
 viewer.scene.light = new Cesium.SunLight();
 
+function sizeByType(type) {
+  if (type === "Active") return 8;
+  if (type === "Junk") return 4;
+  return 6;
+}
+
+// Altitude (meters) -> Cesium.Color
+function altitudeToColorMeters(h) {
+  const km = h / 1000;
+
+  // Example bins (tweak freely)
+  if (km < 200)   return Cesium.Color.DEEPSKYBLUE;
+  if (km < 400)   return Cesium.Color.LIME;
+  if (km < 800)   return Cesium.Color.YELLOW;
+  if (km < 1200)  return Cesium.Color.ORANGE;
+  if (km < 2000)  return Cesium.Color.RED;
+  return Cesium.Color.MAGENTA;
+}
+
 /**
  * Load orbit trajectory data and render satellites/debris into the Cesium viewer.
  *
@@ -76,9 +95,10 @@ viewer.scene.light = new Cesium.SunLight();
  */
 
 async function loadAndRenderTrajectories() {
- try {
-    // Load trajectory JSON 
+  try {
+    // Load trajectory JSON
     const res = await fetch("http://localhost:3000/api/v1/satellites");
+    if (!res.ok) throw new Error(`HTTP ${res.status} when fetching trajectories`);
     const data = await res.json();
 
     console.log("Loaded trajectory data:", data);
@@ -92,82 +112,104 @@ async function loadAndRenderTrajectories() {
     viewer.clock.stopTime  = stop.clone();
     viewer.clock.currentTime = start.clone();
     viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-    viewer.clock.multiplier = 1; // adjust default speed here
+    viewer.clock.multiplier = 1;
     viewer.timeline.zoomTo(start, stop);
 
-    // Render each object
-    data.trajectories.forEach((traj, index) => {
+    // (Optional) Clear old entities first
+    // viewer.entities.removeAll();
+
+    // Render each object as a DOT
+    data.trajectories.forEach((traj) => {
       if (!traj.samples || traj.samples.length === 0) return;
 
-      // Build a SampledPositionProperty (TIME-VARYING)
+      // Build a time-varying position property
       const pos = new Cesium.SampledPositionProperty();
 
-      traj.samples.forEach(sample => {
+      traj.samples.forEach((sample) => {
         const t = Cesium.JulianDate.fromIso8601(sample.t);
-        // It is easier to have lat/lon/alt in the JSON, lat and lon in degrees, alt in meters
+
+        // JSON provides lon/lat degrees, alt meters
         const cart = Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.alt);
-        // const cart = new Cesium.Cartesian3(
-        //   sample.x * 1000,  // km → m
-        //   sample.y * 1000,
-        //   sample.z * 1000
-        // );
+
+        // If instead you use ECI km:
+        // const cart = new Cesium.Cartesian3(sample.x * 1000, sample.y * 1000, sample.z * 1000);
+
         pos.addSample(t, cart);
       });
 
-      // Choose a model
-      let modelUri = "assets/scrap_sat.glb";
-      if(traj.id == 20580) // Object is the hubble telescope. 
-        modelUri = "assets/hubble.glb";
-      else if (traj.type_field == "Active")
-        modelUri = satelliteModelUrlList[index % satelliteModelUrlList.length];
+      // Dynamic color based on altitude at current time
+      const pointColor = new Cesium.CallbackProperty((time) => {
+        const cart = pos.getValue(time);
+        if (!cart) return Cesium.Color.GRAY;
 
+        const carto = Cesium.Cartographic.fromCartesian(cart);
+        return altitudeToColorMeters(carto.height);
+      }, false);
 
-      // Add Cesium entity
+      // Dynamic dot size 
+      const pointSize = sizeByType(traj.type_field);
+
+      // Add entity as a dot
       viewer.entities.add({
         name: traj.name,
         position: pos,
         availability: new Cesium.TimeIntervalCollection([
           new Cesium.TimeInterval({ start, stop })
         ]),
-        model: {
-          uri: modelUri,
-          scale: 200,
-          minimumPixelSize:  20 // Adjust the size of objects here
+
+        // DOT RENDERING
+        // To-do maybe make the dot corelate with their diameter.
+        point: {
+          pixelSize: pointSize,       
+          color: pointColor,          // dynamic by altitude
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+          outlineWidth: 1,
+
+          // Keep dots visible even when behind terrain/earth
+          disableDepthTestDistance: Number.POSITIVE_INFINITY
         },
+
+        // OPTIONAL: keep path; remove for performance
         path: {
-          resolution: 1,
+          resolution: 10,
           material: Cesium.Color.CYAN.withAlpha(0.5),
           width: 2,
           leadTime: 0,
           trailTime: 600
         },
-        label: {
-          text: traj.name,
-          font: "12pt sans-serif",
-          fillColor: Cesium.Color.WHITE,
-          outlineColor: Cesium.Color.BLACK,
-          outlineWidth: 2,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-          verticalOrigin: Cesium.VerticalOrigin.TOP,
-          pixelOffset: new Cesium.Cartesian2(0, -30)
-        },
+
+        // Some TODO stuffs:
+        // - CallbackProperty is expensive.
+        // - Make path conditional for less than 2000 objects maybe? Maybe user can choose to show path.
+        // - labels are expensive for many objects
+        
+        // label: {
+        //   text: traj.name,
+        //   font: "12pt sans-serif",
+        //   fillColor: Cesium.Color.WHITE,
+        //   outlineColor: Cesium.Color.BLACK,
+        //   outlineWidth: 2,
+        //   style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        //   verticalOrigin: Cesium.VerticalOrigin.TOP,
+        //   pixelOffset: new Cesium.Cartesian2(0, -30)
+        // },
 
         // CRITICAL FOR FILTERS TO WORK
         properties: new Cesium.PropertyBag({
           id: traj.id,
-          type: traj.type_field,       // e.g. "PAYLOAD"
-          country: traj.country  // e.g. "US"
+          type: traj.type_field,   // e.g. "Active" / "PAYLOAD" etc
+          country: traj.country
         })
       });
     });
 
-    console.log("Trajectory JSON rendered.");
+    console.log("Trajectory JSON rendered as altitude-colored dots.");
   } catch (err) {
     console.error("Error loading trajectory JSON:", err);
   }
 }
 
-loadAndRenderTrajectories();
+// loadAndRenderTrajectories();
 
 // Camera
 viewer.camera.setView({
@@ -299,13 +341,33 @@ panel.innerHTML = `
 `;
 viewer.container.appendChild(panel);
 
-filterBtn.addEventListener("click", () => {
-  panel.style.display =
-    panel.style.display === "none" || panel.style.display === ""
-      ? "block"
-      : "none";
+panel.style.display = "none";
+
+function isPanelOpen() {
+  return panel.style.display !== "none" && panel.style.display !== "";
+}
+function openPanel() {
+  panel.style.display = "block";
   updateCounter();
+}
+function closePanel() {
+  panel.style.display = "none";
+}
+
+// Toggle panel from filter button
+filterBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (isPanelOpen()) closePanel();
+  else openPanel();
 });
+
+// Clicking any other toolbar button closes it
+toolbar.addEventListener("click", (e) => {
+  if (filterBtn.contains(e.target)) return;
+  if (isPanelOpen()) closePanel();
+});
+
+
 
 /**
  * Utility function: return all checked checkbox values for a category.
@@ -380,8 +442,8 @@ panel.addEventListener("change", ev => {
   }
 });
 
-// Initialize counts
-applyFilters();
+
+
 
 // Kessler Syndrome Simulation button (no functionality yet)
 const ksdButton = document.createElement("button");
@@ -390,3 +452,41 @@ ksdButton.title = "Simulate Kessler Syndrome";
 ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
 toolbar.appendChild(ksdButton);
 
+function createAltitudeLegend() {
+  const legend = document.getElementById("altitude-legend");
+
+  const bins = [
+    { label: "< 200 km",   color: Cesium.Color.DEEPSKYBLUE },
+    { label: "200 – 400 km", color: Cesium.Color.LIME },
+    { label: "400 – 800 km", color: Cesium.Color.YELLOW },
+    { label: "800 – 1200 km", color: Cesium.Color.ORANGE },
+    { label: "1200 – 2000 km", color: Cesium.Color.RED },
+    { label: "> 2000 km",   color: Cesium.Color.MAGENTA }
+  ];
+
+  legend.innerHTML = "<b>Altitude (km)</b>";
+
+  bins.forEach(bin => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+
+    const colorBox = document.createElement("div");
+    colorBox.className = "legend-color";
+    colorBox.style.background = bin.color.toCssColorString();
+
+    const text = document.createElement("span");
+    text.textContent = bin.label;
+
+    item.appendChild(colorBox);
+    item.appendChild(text);
+    legend.appendChild(item);
+  });
+}
+
+// createAltitudeLegend();
+
+window.addEventListener("load", () => {
+  createAltitudeLegend();
+  loadAndRenderTrajectories();
+  applyFilters();
+});

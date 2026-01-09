@@ -66,3 +66,37 @@ html, body, #cesiumContainer {
   object-fit: contain;
   pointer-events: none;
 }
+
+/* Color tag for altitude-based coloring */
+#altitude-legend {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+
+  background: transparent;
+  color: white;
+  padding: 10px 12px;
+  border-radius: 6px;
+
+  font-family: sans-serif;
+  font-size: 12px;
+
+  z-index: 1000;
+
+  /* optional: prevent blocking globe interaction */
+  pointer-events: none;
+}
+
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.legend-color {
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  border: 1px solid #000;
+}
