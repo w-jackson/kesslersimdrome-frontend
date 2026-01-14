@@ -65,12 +65,32 @@ function altitudeToColorMeters(h) {
   const km = h / 1000;
 
   // Example bins (tweak freely)
-  if (km < 200)   return Cesium.Color.DEEPSKYBLUE;
-  if (km < 400)   return Cesium.Color.LIME;
-  if (km < 800)   return Cesium.Color.YELLOW;
-  if (km < 1200)  return Cesium.Color.ORANGE;
-  if (km < 2000)  return Cesium.Color.RED;
+  if (km < 200) return Cesium.Color.DEEPSKYBLUE;
+  if (km < 400) return Cesium.Color.LIME;
+  if (km < 800) return Cesium.Color.YELLOW;
+  if (km < 1200) return Cesium.Color.ORANGE;
+  if (km < 2000) return Cesium.Color.RED;
   return Cesium.Color.MAGENTA;
+}
+
+function normalizeTypeForDev(raw) {
+  if (!raw) return "Active";
+  const t = String(raw).toUpperCase();
+  if (t.includes("PAYLOAD") || t.includes("ACTIVE")) return "Active";
+  return "Junk";
+}
+
+function normalizeCountryForDev(raw) {
+  const known = [
+    "United States",
+    "United Kingdom",
+    "France",
+    "Japan",
+    "Italy",
+    "Soviet Union"
+  ];
+  if (!raw) return "Other";
+  return known.includes(raw) ? raw : "Other";
 }
 
 /**
@@ -97,19 +117,24 @@ function altitudeToColorMeters(h) {
 async function loadAndRenderTrajectories() {
   try {
     // Load trajectory JSON
+    console.time("fetch");
     const res = await fetch("http://localhost:3000/api/v1/satellites");
-    if (!res.ok) throw new Error(`HTTP ${res.status} when fetching trajectories`);
+    console.timeEnd("fetch");
+      
+    console.time("json-parse");
     const data = await res.json();
-
+    console.timeEnd("json-parse");
+      
     console.log("Loaded trajectory data:", data);
+
 
     // Convert global times to Cesium dates
     const start = Cesium.JulianDate.fromIso8601(data.start_time);
-    const stop  = Cesium.JulianDate.fromIso8601(data.end_time);
+    const stop = Cesium.JulianDate.fromIso8601(data.end_time);
 
     // Set Cesium timeline to actual data times
     viewer.clock.startTime = start.clone();
-    viewer.clock.stopTime  = stop.clone();
+    viewer.clock.stopTime = stop.clone();
     viewer.clock.currentTime = start.clone();
     viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
     viewer.clock.multiplier = 1;
@@ -125,17 +150,17 @@ async function loadAndRenderTrajectories() {
       // Build a time-varying position property
       const pos = new Cesium.SampledPositionProperty();
 
-      traj.samples.forEach((sample) => {
-        const t = Cesium.JulianDate.fromIso8601(sample.t);
 
-        // JSON provides lon/lat degrees, alt meters
-        const cart = Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.alt);
+      const STEP = 5; // try 5 or 10 for faster load
 
-        // If instead you use ECI km:
-        // const cart = new Cesium.Cartesian3(sample.x * 1000, sample.y * 1000, sample.z * 1000);
+      for (let i = 0; i < traj.samples.length; i += STEP) {
+        const sample = traj.samples[i];
 
-        pos.addSample(t, cart);
-      });
+        pos.addSample(
+          Cesium.JulianDate.fromIso8601(sample.t),
+          Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.alt)
+        );
+      }
 
       // Dynamic color based on altitude at current time
       const pointColor = new Cesium.CallbackProperty((time) => {
@@ -160,7 +185,7 @@ async function loadAndRenderTrajectories() {
         // DOT RENDERING
         // To-do maybe make the dot corelate with their diameter.
         point: {
-          pixelSize: pointSize,       
+          pixelSize: pointSize,
           color: pointColor,          // dynamic by altitude
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 1,
@@ -169,20 +194,20 @@ async function loadAndRenderTrajectories() {
           disableDepthTestDistance: Number.POSITIVE_INFINITY
         },
 
-        // OPTIONAL: keep path; remove for performance
-        path: {
-          resolution: 10,
-          material: Cesium.Color.CYAN.withAlpha(0.5),
-          width: 2,
-          leadTime: 0,
-          trailTime: 600
-        },
+        //// OPTIONAL: keep path; remove for performance
+        //path: {
+        //  resolution: 10,
+        //  material: Cesium.Color.CYAN.withAlpha(0.5),
+        //  width: 2,
+        //  leadTime: 0,
+        //  trailTime: 600
+        //},
 
         // Some TODO stuffs:
         // - CallbackProperty is expensive.
         // - Make path conditional for less than 2000 objects maybe? Maybe user can choose to show path.
         // - labels are expensive for many objects
-        
+
         // label: {
         //   text: traj.name,
         //   font: "12pt sans-serif",
@@ -197,9 +222,10 @@ async function loadAndRenderTrajectories() {
         // CRITICAL FOR FILTERS TO WORK
         properties: new Cesium.PropertyBag({
           id: traj.id,
-          type: traj.type_field,   // e.g. "Active" / "PAYLOAD" etc
-          country: traj.country
+          type: normalizeTypeForDev(traj.type_field),
+          country: normalizeCountryForDev(traj.country)
         })
+
       });
     });
 
@@ -218,18 +244,18 @@ viewer.camera.setView({
 
 // --- Snap multiplier ONLY after user stops dragging the speed slider ---
 viewer.clock.onTick.addEventListener(() => {
-    const anim = viewer.animation;
-    if (!anim || !anim.viewModel) return;
+  const anim = viewer.animation;
+  if (!anim || !anim.viewModel) return;
 
-    // Don't change anything while the user is dragging the slider
-    if (anim.viewModel.scrubbing) return;
+  // Don't change anything while the user is dragging the slider
+  if (anim.viewModel.scrubbing) return;
 
-    const m = viewer.clock.multiplier;
-    const snapped = Math.round(m);
+  const m = viewer.clock.multiplier;
+  const snapped = Math.round(m);
 
-    if (m !== snapped) {
-        viewer.clock.multiplier = snapped;
-    }
+  if (m !== snapped) {
+    viewer.clock.multiplier = snapped;
+  }
 });
 
 /**
@@ -367,8 +393,6 @@ toolbar.addEventListener("click", (e) => {
   if (isPanelOpen()) closePanel();
 });
 
-
-
 /**
  * Utility function: return all checked checkbox values for a category.
  *
@@ -456,12 +480,12 @@ function createAltitudeLegend() {
   const legend = document.getElementById("altitude-legend");
 
   const bins = [
-    { label: "< 200 km",   color: Cesium.Color.DEEPSKYBLUE },
+    { label: "< 200 km", color: Cesium.Color.DEEPSKYBLUE },
     { label: "200 – 400 km", color: Cesium.Color.LIME },
     { label: "400 – 800 km", color: Cesium.Color.YELLOW },
     { label: "800 – 1200 km", color: Cesium.Color.ORANGE },
     { label: "1200 – 2000 km", color: Cesium.Color.RED },
-    { label: "> 2000 km",   color: Cesium.Color.MAGENTA }
+    { label: "> 2000 km", color: Cesium.Color.MAGENTA }
   ];
 
   legend.innerHTML = "<b>Altitude (km)</b>";
@@ -485,8 +509,8 @@ function createAltitudeLegend() {
 
 // createAltitudeLegend();
 
-window.addEventListener("load", () => {
+window.addEventListener("load", async () => {
   createAltitudeLegend();
-  loadAndRenderTrajectories();
+  await loadAndRenderTrajectories();
   applyFilters();
 });
