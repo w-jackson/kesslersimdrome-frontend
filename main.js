@@ -191,7 +191,7 @@ async function loadAndRenderTrajectories() {
           outlineWidth: 1,
 
           // Keep dots visible even when behind terrain/earth
-          disableDepthTestDistance: Number.POSITIVE_INFINITY
+          disableDepthTestDistance: 0
         },
 
         //// OPTIONAL: keep path; remove for performance
@@ -344,6 +344,15 @@ filterBtn.title = "Filter satellites";
 filterBtn.innerHTML = '<img src="assets/filter_logo.png" class="ksd-filter-icon">';
 toolbar.appendChild(filterBtn);
 
+// Add 'Background Info' button.
+const backgroundBtn = document.createElement("button");
+backgroundBtn.className = "cesium-button cesium-toolbar-button";
+backgroundBtn.title = "Project Background";
+backgroundBtn.textContent = "Info";
+backgroundBtn.addEventListener("click", openPopup);
+toolbar.appendChild(backgroundBtn);
+
+
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
 panel.innerHTML = `
@@ -467,7 +476,20 @@ panel.addEventListener("change", ev => {
 });
 
 
+// Methods for handling info popup menu. 
+window.addEventListener("load", () => { 
+  openPopup();
+});
 
+function openPopup() {
+  document.getElementById("popup").style.display = "block";
+  document.body.style.overflow = "hidden"; // prevent page scroll
+}
+
+function closePopup() {
+  document.getElementById("popup").style.display = "none";
+  document.body.style.overflow = "auto";
+}
 
 // Kessler Syndrome Simulation button (no functionality yet)
 const ksdButton = document.createElement("button");

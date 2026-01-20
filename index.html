@@ -26,6 +26,42 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <div id="popup" class="popup-overlay">
+  <div class="popup-box">
+    <button class="close-btn" onclick="closePopup()">✕</button>
+
+    <!-- Header with logo on the left -->
+    <div class="popup-header">
+      <img src="./assets/ksd_logo.png" alt="Logo Image" id="info_page_logo_image">
+      <h2>KesslerSIMDrome</h2>
+    </div>
+
+    <div class="popup-content">
+      <h3>Project Description</h3>
+      <p>
+        KesslerSimDrome is an interactive simulation platform designed to visualize and analyze low-Earth orbit (LEO) space debris. The system targets three main groups of stakeholders: students and educators seeking accessible tools to explore orbital mechanics and the Kessler syndrome, researchers needing robust analysis tools for debris tracking and launch risk assessment, and the general public and space enthusiasts interested in visualizing satellites and space debris.
+        The project addresses key challenges these stakeholders face. Students and educators often lack interactive resources to demonstrate orbital dynamics and debris behavior. Researchers are limited by specialized software that can be complex and inaccessible, while the public has minimal exposure to the scale and risks of orbital debris. KesslerSimDrome overcomes these barriers by providing real-time simulations with features such as time scaling, debris filtering, ground track visualization, and scenario playback. Users can create custom simulations using either manually added debris or publicly available datasets, while real-time satellite position data enhances realism and educational value.
+        By combining accurate physics-based modeling with intuitive, visual interfaces, KesslerSimDrome enables stakeholders to explore orbital environments, assess collision risks, and calculate safe launch trajectories. This project not only serves as an educational and research tool but also fosters greater awareness of the hazards posed by space debris, making it a compelling and impactful capstone project. <br><br>
+      </p>
+      
+      <br>
+      <h3>Important Terminology</h3>
+      <p><b>LEO(Low Earth Orbit): </b>Low Earth Orbit (LEO) is an orbit around Earth at an altitude typically ranging from 160 km to 2,000 km above the surface.  It is the closest region of space to Earth.</p>
+      <p><b>Kessler Syndrome: </b>Kessler Syndrome is a theoretical scenario in which the density of objects in low Earth orbit (LEO) becomes so high that collisions between space debris trigger a self-sustaining cascade of further collisions.  Each collision generates more debris, increasing the likelihood of additional impacts, which can render LEO increasingly hazardous or even unusable for future space missions.</p>
+
+      <br>
+      <h3>Sources</h3>
+      <p><b>CelesTrak: </b>Used for satellite data. Link: <i>https://celestrak.org/</i></p>
+      <p><b>Nasa Models: </b>Used several of Nasa's publicly available 3D models. Link <i>https://science.nasa.gov/3d-resources/</i></p>
+
+      <br>
+      <h3>Authors</h3>
+      <p>Rishab Dixit, Roy Hoang, Samuel Dutson, Will Jackson</p>
+    </div>
+  </div>
+</div>
+
   <div id="cesiumContainer"></div>
   <div id="altitude-legend"></div>
   <!-- main logic -->

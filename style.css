@@ -67,6 +67,12 @@ html, body, #cesiumContainer {
   pointer-events: none;
 }
 
+#info_page_logo_image {
+  width: 100px;
+  height: 100px;
+  padding: 10px;
+}
+
 /* Color tag for altitude-based coloring */
 #altitude-legend {
   position: fixed;
@@ -99,4 +105,57 @@ html, body, #cesiumContainer {
   height: 14px;
   margin-right: 8px;
   border: 1px solid #000;
+}
+
+/* CSS for Popup info menu. */
+.popup-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  z-index: 1000;
+}
+
+.popup-box {
+  background: black;
+  color: white;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  margin: 5vh auto;
+  padding: 20px;
+  border-radius: 8px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-content {
+  overflow-y: auto;
+  color: white;
+  margin-top: 10px;
+  padding-right: 10px;
+}
+
+.close-btn {
+  position: absolute;
+  color: white;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;  
+  gap: 15px;     
+}      
+
+#info_page_logo_image {
+  width: 80px;           
+  height: auto;
 }
