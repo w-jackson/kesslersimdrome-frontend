@@ -43,13 +43,14 @@ viewer.baseLayerPicker.viewModel.imageryProviderViewModels =
 viewer.baseLayerPicker.viewModel.terrainProviderViewModels = [];
 
 const satelliteModelUrlList = [
-  "assets/test_sat1.glb",
-  "assets/test_sat2.glb",
-  "assets/test_sat3.glb",
-  "assets/test_sat4.glb",
-  "assets/test_sat5.glb"
+  "hubble.glb",
+  "ISS_stationary.glb"
 ];
 
+const MODEL_BY_ID = new Map([
+  [20580, "assets/hubble.glb"],         // Hubble
+  [25544, "assets/ISS_stationary.glb"]  // ISS
+]);
 // Lighting
 viewer.scene.globe.enableLighting = true;
 viewer.scene.light = new Cesium.SunLight();
@@ -71,6 +72,16 @@ function altitudeToColorMeters(h) {
   if (km < 1200) return Cesium.Color.ORANGE;
   if (km < 2000) return Cesium.Color.RED;
   return Cesium.Color.MAGENTA;
+}
+
+function altitudeToBin(h) {
+  const km = h / 1000;
+  if (km < 200) return "0-200";
+  if (km < 400) return "200-400";
+  if (km < 800) return "400-800";
+  if (km < 1200) return "800-1200";
+  if (km < 2000) return "1200-2000";
+  return "2000+";
 }
 
 function normalizeTypeForDev(raw) {
@@ -120,17 +131,18 @@ async function loadAndRenderTrajectories() {
     console.time("fetch");
     const res = await fetch("http://localhost:3000/api/v1/satellites");
     console.timeEnd("fetch");
-      
+
     console.time("json-parse");
     const data = await res.json();
     console.timeEnd("json-parse");
-      
+
     console.log("Loaded trajectory data:", data);
 
 
     // Convert global times to Cesium dates
     const start = Cesium.JulianDate.fromIso8601(data.start_time);
     const stop = Cesium.JulianDate.fromIso8601(data.end_time);
+
 
     // Set Cesium timeline to actual data times
     viewer.clock.startTime = start.clone();
@@ -173,6 +185,8 @@ async function loadAndRenderTrajectories() {
 
       // Dynamic dot size 
       const pointSize = sizeByType(traj.type_field);
+      const altBin = altitudeToBin(traj.samples[0].alt);
+      const modelUri = MODEL_BY_ID.get(traj.id) || null;
 
       // Add entity as a dot
       viewer.entities.add({
@@ -190,9 +204,18 @@ async function loadAndRenderTrajectories() {
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 1,
 
-          // Keep dots visible even when behind terrain/earth
+          // Keep dots invisible when behind terrain/earth
           disableDepthTestDistance: 0
         },
+
+        // Render 3D model if available
+        model: modelUri
+          ? {
+            uri: modelUri,
+            minimumPixelSize: 1000,
+            maximumScale: 5000
+          }
+          : undefined,
 
         //// OPTIONAL: keep path; remove for performance
         //path: {
@@ -223,9 +246,9 @@ async function loadAndRenderTrajectories() {
         properties: new Cesium.PropertyBag({
           id: traj.id,
           type: normalizeTypeForDev(traj.type_field),
-          country: normalizeCountryForDev(traj.country)
+          country: normalizeCountryForDev(traj.country),
+          altBin: altBin
         })
-
       });
     });
 
@@ -429,9 +452,12 @@ function getCheckedValues(selector) {
  * Side Effects:
  *   - Shows or hides Cesium entities in real time.
  */
+
+const activeAltBins = new Set(["0-200", "200-400", "400-800", "800-1200", "1200-2000", "2000+"]);
 function applyFilters() {
   const activeTypes = getCheckedValues(".f-type");
   const activeCountries = getCheckedValues(".f-country");
+
 
   const entities = viewer.entities.values;
   for (let i = 0; i < entities.length; i++) {
@@ -442,7 +468,10 @@ function applyFilters() {
     const t = props.type;
     const c = props.country;
 
-    const show = activeTypes.includes(t) && activeCountries.includes(c);
+    const show =
+      activeTypes.includes(t) &&
+      activeCountries.includes(c) &&
+      activeAltBins.has(props.altBin);
     e.show = show;
   }
   updateCounter();
@@ -477,7 +506,7 @@ panel.addEventListener("change", ev => {
 
 
 // Methods for handling info popup menu. 
-window.addEventListener("load", () => { 
+window.addEventListener("load", () => {
   openPopup();
 });
 
@@ -500,21 +529,36 @@ toolbar.appendChild(ksdButton);
 
 function createAltitudeLegend() {
   const legend = document.getElementById("altitude-legend");
-
-  const bins = [
-    { label: "< 200 km", color: Cesium.Color.DEEPSKYBLUE },
-    { label: "200 – 400 km", color: Cesium.Color.LIME },
-    { label: "400 – 800 km", color: Cesium.Color.YELLOW },
-    { label: "800 – 1200 km", color: Cesium.Color.ORANGE },
-    { label: "1200 – 2000 km", color: Cesium.Color.RED },
-    { label: "> 2000 km", color: Cesium.Color.MAGENTA }
-  ];
+  if (!legend) return;
 
   legend.innerHTML = "<b>Altitude (km)</b>";
 
+  const bins = [
+    { key: "0-200", label: "< 200 km", color: Cesium.Color.DEEPSKYBLUE },
+    { key: "200-400", label: "200 – 400 km", color: Cesium.Color.LIME },
+    { key: "400-800", label: "400 – 800 km", color: Cesium.Color.YELLOW },
+    { key: "800-1200", label: "800 – 1200 km", color: Cesium.Color.ORANGE },
+    { key: "1200-2000", label: "1200 – 2000 km", color: Cesium.Color.RED },
+    { key: "2000+", label: "> 2000 km", color: Cesium.Color.MAGENTA }
+  ];
+
   bins.forEach(bin => {
-    const item = document.createElement("div");
-    item.className = "legend-item";
+    const row = document.createElement("label");
+    row.className = "legend-item";
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "6px";
+
+    // THIS is the checkbox
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+
+    cb.addEventListener("change", () => {
+      if (cb.checked) activeAltBins.add(bin.key);
+      else activeAltBins.delete(bin.key);
+      applyFilters(); // re-filter entities
+    });
 
     const colorBox = document.createElement("div");
     colorBox.className = "legend-color";
@@ -523,14 +567,14 @@ function createAltitudeLegend() {
     const text = document.createElement("span");
     text.textContent = bin.label;
 
-    item.appendChild(colorBox);
-    item.appendChild(text);
-    legend.appendChild(item);
+    row.appendChild(cb);
+    row.appendChild(colorBox);
+    row.appendChild(text);
+    legend.appendChild(row);
   });
 }
 
 // createAltitudeLegend();
-
 window.addEventListener("load", async () => {
   createAltitudeLegend();
   await loadAndRenderTrajectories();

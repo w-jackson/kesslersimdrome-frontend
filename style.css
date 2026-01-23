@@ -90,7 +90,7 @@ html, body, #cesiumContainer {
   z-index: 1000;
 
   /* optional: prevent blocking globe interaction */
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 
