@@ -51,6 +51,7 @@ const MODEL_BY_ID = new Map([
   [20580, "assets/hubble.glb"],         // Hubble
   [25544, "assets/ISS_stationary.glb"]  // ISS
 ]);
+
 // Lighting
 viewer.scene.globe.enableLighting = true;
 viewer.scene.light = new Cesium.SunLight();
@@ -84,13 +85,14 @@ function altitudeToBin(h) {
   return "2000+";
 }
 
+// FOR DEV PURPOSES ONLY
 function normalizeTypeForDev(raw) {
   if (!raw) return "Active";
   const t = String(raw).toUpperCase();
   if (t.includes("PAYLOAD") || t.includes("ACTIVE")) return "Active";
   return "Junk";
 }
-
+// FOR DEV PURPOSES ONLY
 function normalizeCountryForDev(raw) {
   const known = [
     "United States",
@@ -102,6 +104,148 @@ function normalizeCountryForDev(raw) {
   ];
   if (!raw) return "Other";
   return known.includes(raw) ? raw : "Other";
+}
+// --- DATA SOURCES (fast mode switch) ---
+const normalDS = new Cesium.CustomDataSource("normal");
+const kesslerDS = new Cesium.CustomDataSource("kessler");
+viewer.dataSources.add(normalDS);
+viewer.dataSources.add(kesslerDS);
+
+normalDS.show = true;
+kesslerDS.show = false;
+
+// --- LIVE UPDATES (Kessler Syndrome Simulation) ---
+let MODE = "NORMAL"; // "NORMAL" | "KESSLER"
+let LIVE_TIMER = null;
+
+// Cache for fast updates in Kessler mode
+const LIVE_ENTITY_BY_ID = new Map();
+
+function stopLiveUpdates() {
+  if (LIVE_TIMER) clearInterval(LIVE_TIMER);
+  LIVE_TIMER = null;
+}
+
+function clearKesslerObjectsOnly() {
+  kesslerDS.entities.removeAll();
+  LIVE_ENTITY_BY_ID.clear();
+}
+
+function applySnapshot(snapshot) {
+  for (const o of snapshot.objects) {
+    upsertLiveDot(o);
+  }
+  applyFilters();
+}
+
+// FOR DEV PURPOSES ONLY: Simulate Kessler syndrome with fake data
+function startFakeKesslerStream(seedIds = [20580, 25544], count = 50) {
+  stopLiveUpdates();
+  MODE = "KESSLER";
+
+  // hide normal, show kessler
+  normalDS.show = false;
+  kesslerDS.show = true;
+
+  // clear only kessler entities
+  clearKesslerObjectsOnly();
+
+
+  // Make some fake objects around earth
+  const objects = [];
+  for (let i = 0; i < count; i++) {
+    const id = i < seedIds.length ? seedIds[i] : 900000 + i;
+    objects.push({
+      id,
+      lat: (Math.random() * 180) - 90,
+      lon: (Math.random() * 360) - 180,
+      alt: 200000 + Math.random() * 1800000, // 200km–2000km
+      type: i % 3 === 0 ? "Active" : "Junk",
+      country: "Other",
+      // motion params:
+      dlon: (Math.random() * 1.5 + 0.2) * (Math.random() < 0.5 ? -1 : 1),
+      dlat: (Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1),
+    });
+  }
+
+  LIVE_TIMER = setInterval(() => {
+    // move them a little each tick
+    for (const o of objects) {
+      o.lon += o.dlon;
+      o.lat += o.dlat;
+
+      if (o.lon > 180) o.lon -= 360;
+      if (o.lon < -180) o.lon += 360;
+      if (o.lat > 90) o.lat = 90;
+      if (o.lat < -90) o.lat = -90;
+
+      // alt wiggle
+      o.alt += (Math.random() - 0.5) * 2000;
+      o.alt = Math.max(160000, Math.min(2200000, o.alt));
+    }
+
+    applySnapshot({ objects });
+  }, 200); // 5 Hz
+}
+
+// Upsert a live-updating dot entity for Kessler mode
+function upsertLiveDot(o) {
+  const id = String(o.id);
+  const p = Cesium.Cartesian3.fromDegrees(o.lon, o.lat, o.alt);
+
+  let e = LIVE_ENTITY_BY_ID.get(id);
+  if (!e) {
+    // Create dot entity once
+    e = kesslerDS.entities.add({
+      id,
+      name: id,
+      position: new Cesium.ConstantPositionProperty(p),
+
+      point: {
+        pixelSize: sizeByType(normalizeTypeForDev(o.type)),
+        color: altitudeToColorMeters(o.alt), // <-- no CallbackProperty in Kessler mode
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+        outlineWidth: 1,
+        disableDepthTestDistance: 0
+      },
+
+      properties: new Cesium.PropertyBag({
+        id: o.id,
+        type: normalizeTypeForDev(o.type),
+        country: normalizeCountryForDev(o.country),
+        altBin: altitudeToBin(o.alt)
+      })
+    });
+
+    LIVE_ENTITY_BY_ID.set(id, e);
+  } else {
+    // Update position fast
+    e.position.setValue(p);
+
+    // If you want filters to reflect changing altitude bins, update altBin too:
+    e.properties.altBin = altitudeToBin(o.alt);
+
+    // Update color by altitude (cheap; runs only per update tick)
+    e.point.color = altitudeToColorMeters(o.alt);
+  }
+}
+
+// Return to normal mode from Kessler mode
+async function returnToNormalMode() {
+  if (MODE === "NORMAL") return;
+
+  console.log("Returning to NORMAL mode");
+
+  stopLiveUpdates();
+  clearKesslerObjectsOnly();
+
+  MODE = "NORMAL";
+
+  // show normal, hide kessler (NO refetch/rebuild)
+  kesslerDS.show = false;
+  normalDS.show = true;
+
+  applyFilters();
 }
 
 /**
@@ -127,6 +271,10 @@ function normalizeCountryForDev(raw) {
 
 async function loadAndRenderTrajectories() {
   try {
+    if (normalDS.entities.values.length > 0) {
+      console.log("Normal DS already populated; skipping rebuild.");
+      return;
+    }
     // Load trajectory JSON
     console.time("fetch");
     const res = await fetch("http://localhost:3000/api/v1/satellites");
@@ -161,8 +309,6 @@ async function loadAndRenderTrajectories() {
 
       // Build a time-varying position property
       const pos = new Cesium.SampledPositionProperty();
-
-
       const STEP = 5; // try 5 or 10 for faster load
 
       for (let i = 0; i < traj.samples.length; i += STEP) {
@@ -189,7 +335,7 @@ async function loadAndRenderTrajectories() {
       const modelUri = MODEL_BY_ID.get(traj.id) || null;
 
       // Add entity as a dot
-      viewer.entities.add({
+      normalDS.entities.add({
         name: traj.name,
         position: pos,
         availability: new Cesium.TimeIntervalCollection([
@@ -197,7 +343,6 @@ async function loadAndRenderTrajectories() {
         ]),
 
         // DOT RENDERING
-        // To-do maybe make the dot corelate with their diameter.
         point: {
           pixelSize: pointSize,
           color: pointColor,          // dynamic by altitude
@@ -217,31 +362,6 @@ async function loadAndRenderTrajectories() {
           }
           : undefined,
 
-        //// OPTIONAL: keep path; remove for performance
-        //path: {
-        //  resolution: 10,
-        //  material: Cesium.Color.CYAN.withAlpha(0.5),
-        //  width: 2,
-        //  leadTime: 0,
-        //  trailTime: 600
-        //},
-
-        // Some TODO stuffs:
-        // - CallbackProperty is expensive.
-        // - Make path conditional for less than 2000 objects maybe? Maybe user can choose to show path.
-        // - labels are expensive for many objects
-
-        // label: {
-        //   text: traj.name,
-        //   font: "12pt sans-serif",
-        //   fillColor: Cesium.Color.WHITE,
-        //   outlineColor: Cesium.Color.BLACK,
-        //   outlineWidth: 2,
-        //   style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        //   verticalOrigin: Cesium.VerticalOrigin.TOP,
-        //   pixelOffset: new Cesium.Cartesian2(0, -30)
-        // },
-
         // CRITICAL FOR FILTERS TO WORK
         properties: new Cesium.PropertyBag({
           id: traj.id,
@@ -257,8 +377,6 @@ async function loadAndRenderTrajectories() {
     console.error("Error loading trajectory JSON:", err);
   }
 }
-
-// loadAndRenderTrajectories();
 
 // Camera
 viewer.camera.setView({
@@ -375,6 +493,26 @@ backgroundBtn.textContent = "Info";
 backgroundBtn.addEventListener("click", openPopup);
 toolbar.appendChild(backgroundBtn);
 
+// Kessler Syndrome Simulation button (no functionality yet)
+const ksdButton = document.createElement("button");
+ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
+ksdButton.title = "Simulate Kessler Syndrome";
+ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
+toolbar.appendChild(ksdButton);
+
+ksdButton.addEventListener("click", async () => {
+  if (MODE === "NORMAL") {
+    // Enter Kessler mode (fake for now)
+    startFakeKesslerStream([20580, 25544], 200);
+    ksdButton.classList.add("active");
+    ksdButton.title = "Exit Kessler Simulation";
+  } else {
+    // Exit Kessler mode
+    await returnToNormalMode();
+    ksdButton.classList.remove("active");
+    ksdButton.title = "Simulate Kessler Syndrome";
+  }
+});
 
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
@@ -459,12 +597,15 @@ function applyFilters() {
   const activeCountries = getCheckedValues(".f-country");
 
 
-  const entities = viewer.entities.values;
+  const entities = (MODE === "KESSLER")
+    ? kesslerDS.entities.values
+    : normalDS.entities.values;
+
   for (let i = 0; i < entities.length; i++) {
     const e = entities[i];
     if (!e.properties) continue;
 
-    const props = e.properties.getValue(Cesium.JulianDate.now());
+    const props = e.properties.getValue(viewer.clock.currentTime);
     const t = props.type;
     const c = props.country;
 
@@ -486,13 +627,19 @@ function applyFilters() {
  *   - Writes values into the counter UI
  */
 function updateCounter() {
-  const total = viewer.entities.values.filter(e => e.properties).length;
-  const visible = viewer.entities.values.filter(e => e.properties && e.show).length;
+  const entities = (MODE === "KESSLER")
+    ? kesslerDS.entities.values
+    : normalDS.entities.values;
+
+  const total = entities.filter(e => e.properties).length;
+  const visible = entities.filter(e => e.properties && e.show).length;
+
   const vEl = panel.querySelector("#ksd-visible");
   const tEl = panel.querySelector("#ksd-total");
   if (vEl) vEl.textContent = String(visible);
   if (tEl) tEl.textContent = String(total);
 }
+
 
 panel.addEventListener("change", ev => {
   if (
@@ -519,13 +666,6 @@ function closePopup() {
   document.getElementById("popup").style.display = "none";
   document.body.style.overflow = "auto";
 }
-
-// Kessler Syndrome Simulation button (no functionality yet)
-const ksdButton = document.createElement("button");
-ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
-ksdButton.title = "Simulate Kessler Syndrome";
-ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
-toolbar.appendChild(ksdButton);
 
 function createAltitudeLegend() {
   const legend = document.getElementById("altitude-legend");
