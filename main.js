@@ -519,17 +519,20 @@ panel.className = "ksd-filter-panel";
 panel.innerHTML = `
   <h4>Filters</h4>
   <div class="ksd-filter-row"><strong>Type</strong>
-    <label><input type="checkbox" class="f-type" value="Active" checked>Satellite</label>
-    <label><input type="checkbox" class="f-type" value="Junk" checked>Debris</label>
+    <label><input type="checkbox" class="f-type" value="PAY" checked>Satellite</label>
+    <label><input type="checkbox" class="f-type" value="R/B" checked>Rocket-Body/Debris</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-filter-row"><strong>Country</strong>
-    <label><input type="checkbox" class="f-country" value="United States" checked>United States</label>
-    <label><input type="checkbox" class="f-country" value="United Kingdom" checked>United Kingdom</label>
-    <label><input type="checkbox" class="f-country" value="France" checked>France</label>
-    <label><input type="checkbox" class="f-country" value="Japan" checked>Japan</label>
-    <label><input type="checkbox" class="f-country" value="Italy" checked>Italy</label>
-    <label><input type="checkbox" class="f-country" value="Soviet Union" checked>Soviet Union</label>
+    <label><input type="checkbox" class="f-country" value="US" checked>United States</label>
+    <label><input type="checkbox" class="f-country" value="BRAZ" checked>Brazil</label>
+    <label><input type="checkbox" class="f-country" value="GER" checked>Germany</label>
+    <label><input type="checkbox" class="f-country" value="UK" checked>United Kingdom</label>
+    <label><input type="checkbox" class="f-country" value="FR" checked>France</label>
+    <label><input type="checkbox" class="f-country" value="JPN" checked>Japan</label>
+    <label><input type="checkbox" class="f-country" value="IT" checked>Italy</label>
+    <label><input type="checkbox" class="f-country" value="CIS" checked>Russia</label>
+    <label><input type="checkbox" class="f-country" value="PRC" checked>China</label>
     <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
   </div>
   <div class="ksd-divider"></div>
