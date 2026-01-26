@@ -43,12 +43,14 @@ viewer.baseLayerPicker.viewModel.imageryProviderViewModels =
 viewer.baseLayerPicker.viewModel.terrainProviderViewModels = [];
 
 const satelliteModelUrlList = [
-  "assets/test_sat1.glb",
-  "assets/test_sat2.glb",
-  "assets/test_sat3.glb",
-  "assets/test_sat4.glb",
-  "assets/test_sat5.glb"
+  "hubble.glb",
+  "ISS_stationary.glb"
 ];
+
+const MODEL_BY_ID = new Map([
+  [20580, "assets/hubble.glb"],         // Hubble
+  [25544, "assets/ISS_stationary.glb"]  // ISS
+]);
 
 // Lighting
 viewer.scene.globe.enableLighting = true;
@@ -73,13 +75,24 @@ function altitudeToColorMeters(h) {
   return Cesium.Color.MAGENTA;
 }
 
+function altitudeToBin(h) {
+  const km = h / 1000;
+  if (km < 200) return "0-200";
+  if (km < 400) return "200-400";
+  if (km < 800) return "400-800";
+  if (km < 1200) return "800-1200";
+  if (km < 2000) return "1200-2000";
+  return "2000+";
+}
+
+// FOR DEV PURPOSES ONLY
 function normalizeTypeForDev(raw) {
   if (!raw) return "Active";
   const t = String(raw).toUpperCase();
   if (t.includes("PAYLOAD") || t.includes("ACTIVE")) return "Active";
   return "Junk";
 }
-
+// FOR DEV PURPOSES ONLY
 function normalizeCountryForDev(raw) {
   const known = [
     "United States",
@@ -91,6 +104,148 @@ function normalizeCountryForDev(raw) {
   ];
   if (!raw) return "Other";
   return known.includes(raw) ? raw : "Other";
+}
+// --- DATA SOURCES (fast mode switch) ---
+const normalDS = new Cesium.CustomDataSource("normal");
+const kesslerDS = new Cesium.CustomDataSource("kessler");
+viewer.dataSources.add(normalDS);
+viewer.dataSources.add(kesslerDS);
+
+normalDS.show = true;
+kesslerDS.show = false;
+
+// --- LIVE UPDATES (Kessler Syndrome Simulation) ---
+let MODE = "NORMAL"; // "NORMAL" | "KESSLER"
+let LIVE_TIMER = null;
+
+// Cache for fast updates in Kessler mode
+const LIVE_ENTITY_BY_ID = new Map();
+
+function stopLiveUpdates() {
+  if (LIVE_TIMER) clearInterval(LIVE_TIMER);
+  LIVE_TIMER = null;
+}
+
+function clearKesslerObjectsOnly() {
+  kesslerDS.entities.removeAll();
+  LIVE_ENTITY_BY_ID.clear();
+}
+
+function applySnapshot(snapshot) {
+  for (const o of snapshot.objects) {
+    upsertLiveDot(o);
+  }
+  applyFilters();
+}
+
+// FOR DEV PURPOSES ONLY: Simulate Kessler syndrome with fake data
+function startFakeKesslerStream(seedIds = [20580, 25544], count = 50) {
+  stopLiveUpdates();
+  MODE = "KESSLER";
+
+  // hide normal, show kessler
+  normalDS.show = false;
+  kesslerDS.show = true;
+
+  // clear only kessler entities
+  clearKesslerObjectsOnly();
+
+
+  // Make some fake objects around earth
+  const objects = [];
+  for (let i = 0; i < count; i++) {
+    const id = i < seedIds.length ? seedIds[i] : 900000 + i;
+    objects.push({
+      id,
+      lat: (Math.random() * 180) - 90,
+      lon: (Math.random() * 360) - 180,
+      alt: 200000 + Math.random() * 1800000, // 200km–2000km
+      type: i % 3 === 0 ? "Active" : "Junk",
+      country: "Other",
+      // motion params:
+      dlon: (Math.random() * 1.5 + 0.2) * (Math.random() < 0.5 ? -1 : 1),
+      dlat: (Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1),
+    });
+  }
+
+  LIVE_TIMER = setInterval(() => {
+    // move them a little each tick
+    for (const o of objects) {
+      o.lon += o.dlon;
+      o.lat += o.dlat;
+
+      if (o.lon > 180) o.lon -= 360;
+      if (o.lon < -180) o.lon += 360;
+      if (o.lat > 90) o.lat = 90;
+      if (o.lat < -90) o.lat = -90;
+
+      // alt wiggle
+      o.alt += (Math.random() - 0.5) * 2000;
+      o.alt = Math.max(160000, Math.min(2200000, o.alt));
+    }
+
+    applySnapshot({ objects });
+  }, 200); // 5 Hz
+}
+
+// Upsert a live-updating dot entity for Kessler mode
+function upsertLiveDot(o) {
+  const id = String(o.id);
+  const p = Cesium.Cartesian3.fromDegrees(o.lon, o.lat, o.alt);
+
+  let e = LIVE_ENTITY_BY_ID.get(id);
+  if (!e) {
+    // Create dot entity once
+    e = kesslerDS.entities.add({
+      id,
+      name: id,
+      position: new Cesium.ConstantPositionProperty(p),
+
+      point: {
+        pixelSize: sizeByType(normalizeTypeForDev(o.type)),
+        color: altitudeToColorMeters(o.alt), // <-- no CallbackProperty in Kessler mode
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+        outlineWidth: 1,
+        disableDepthTestDistance: 0
+      },
+
+      properties: new Cesium.PropertyBag({
+        id: o.id,
+        type: normalizeTypeForDev(o.type),
+        country: normalizeCountryForDev(o.country),
+        altBin: altitudeToBin(o.alt)
+      })
+    });
+
+    LIVE_ENTITY_BY_ID.set(id, e);
+  } else {
+    // Update position fast
+    e.position.setValue(p);
+
+    // If you want filters to reflect changing altitude bins, update altBin too:
+    e.properties.altBin = altitudeToBin(o.alt);
+
+    // Update color by altitude (cheap; runs only per update tick)
+    e.point.color = altitudeToColorMeters(o.alt);
+  }
+}
+
+// Return to normal mode from Kessler mode
+async function returnToNormalMode() {
+  if (MODE === "NORMAL") return;
+
+  console.log("Returning to NORMAL mode");
+
+  stopLiveUpdates();
+  clearKesslerObjectsOnly();
+
+  MODE = "NORMAL";
+
+  // show normal, hide kessler (NO refetch/rebuild)
+  kesslerDS.show = false;
+  normalDS.show = true;
+
+  applyFilters();
 }
 
 /**
@@ -116,21 +271,26 @@ function normalizeCountryForDev(raw) {
 
 async function loadAndRenderTrajectories() {
   try {
+    if (normalDS.entities.values.length > 0) {
+      console.log("Normal DS already populated; skipping rebuild.");
+      return;
+    }
     // Load trajectory JSON
     console.time("fetch");
     const res = await fetch("http://localhost:3000/api/v1/satellites");
     console.timeEnd("fetch");
-      
+
     console.time("json-parse");
     const data = await res.json();
     console.timeEnd("json-parse");
-      
+
     console.log("Loaded trajectory data:", data);
 
 
     // Convert global times to Cesium dates
     const start = Cesium.JulianDate.fromIso8601(data.start_time);
     const stop = Cesium.JulianDate.fromIso8601(data.end_time);
+
 
     // Set Cesium timeline to actual data times
     viewer.clock.startTime = start.clone();
@@ -149,8 +309,6 @@ async function loadAndRenderTrajectories() {
 
       // Build a time-varying position property
       const pos = new Cesium.SampledPositionProperty();
-
-
       const STEP = 5; // try 5 or 10 for faster load
 
       for (let i = 0; i < traj.samples.length; i += STEP) {
@@ -173,9 +331,11 @@ async function loadAndRenderTrajectories() {
 
       // Dynamic dot size 
       const pointSize = sizeByType(traj.type_field);
+      const altBin = altitudeToBin(traj.samples[0].alt);
+      const modelUri = MODEL_BY_ID.get(traj.id) || null;
 
       // Add entity as a dot
-      viewer.entities.add({
+      normalDS.entities.add({
         name: traj.name,
         position: pos,
         availability: new Cesium.TimeIntervalCollection([
@@ -183,49 +343,32 @@ async function loadAndRenderTrajectories() {
         ]),
 
         // DOT RENDERING
-        // To-do maybe make the dot corelate with their diameter.
         point: {
           pixelSize: pointSize,
           color: pointColor,          // dynamic by altitude
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 1,
 
-          // Keep dots visible even when behind terrain/earth
+          // Keep dots invisible when behind terrain/earth
           disableDepthTestDistance: 0
         },
 
-        //// OPTIONAL: keep path; remove for performance
-        //path: {
-        //  resolution: 10,
-        //  material: Cesium.Color.CYAN.withAlpha(0.5),
-        //  width: 2,
-        //  leadTime: 0,
-        //  trailTime: 600
-        //},
-
-        // Some TODO stuffs:
-        // - CallbackProperty is expensive.
-        // - Make path conditional for less than 2000 objects maybe? Maybe user can choose to show path.
-        // - labels are expensive for many objects
-
-        // label: {
-        //   text: traj.name,
-        //   font: "12pt sans-serif",
-        //   fillColor: Cesium.Color.WHITE,
-        //   outlineColor: Cesium.Color.BLACK,
-        //   outlineWidth: 2,
-        //   style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        //   verticalOrigin: Cesium.VerticalOrigin.TOP,
-        //   pixelOffset: new Cesium.Cartesian2(0, -30)
-        // },
+        // Render 3D model if available
+        model: modelUri
+          ? {
+            uri: modelUri,
+            minimumPixelSize: 1000,
+            maximumScale: 5000
+          }
+          : undefined,
 
         // CRITICAL FOR FILTERS TO WORK
         properties: new Cesium.PropertyBag({
           id: traj.id,
           type: normalizeTypeForDev(traj.type_field),
-          country: normalizeCountryForDev(traj.country)
+          country: normalizeCountryForDev(traj.country),
+          altBin: altBin
         })
-
       });
     });
 
@@ -234,8 +377,6 @@ async function loadAndRenderTrajectories() {
     console.error("Error loading trajectory JSON:", err);
   }
 }
-
-// loadAndRenderTrajectories();
 
 // Camera
 viewer.camera.setView({
@@ -352,23 +493,46 @@ backgroundBtn.textContent = "Info";
 backgroundBtn.addEventListener("click", openPopup);
 toolbar.appendChild(backgroundBtn);
 
+// Kessler Syndrome Simulation button (no functionality yet)
+const ksdButton = document.createElement("button");
+ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
+ksdButton.title = "Simulate Kessler Syndrome";
+ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
+toolbar.appendChild(ksdButton);
+
+ksdButton.addEventListener("click", async () => {
+  if (MODE === "NORMAL") {
+    // Enter Kessler mode (fake for now)
+    startFakeKesslerStream([20580, 25544], 200);
+    ksdButton.classList.add("active");
+    ksdButton.title = "Exit Kessler Simulation";
+  } else {
+    // Exit Kessler mode
+    await returnToNormalMode();
+    ksdButton.classList.remove("active");
+    ksdButton.title = "Simulate Kessler Syndrome";
+  }
+});
 
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
 panel.innerHTML = `
   <h4>Filters</h4>
   <div class="ksd-filter-row"><strong>Type</strong>
-    <label><input type="checkbox" class="f-type" value="Active" checked>Satellite</label>
-    <label><input type="checkbox" class="f-type" value="Junk" checked>Debris</label>
+    <label><input type="checkbox" class="f-type" value="PAY" checked>Satellite</label>
+    <label><input type="checkbox" class="f-type" value="R/B" checked>Rocket-Body/Debris</label>
   </div>
   <div class="ksd-divider"></div>
   <div class="ksd-filter-row"><strong>Country</strong>
-    <label><input type="checkbox" class="f-country" value="United States" checked>United States</label>
-    <label><input type="checkbox" class="f-country" value="United Kingdom" checked>United Kingdom</label>
-    <label><input type="checkbox" class="f-country" value="France" checked>France</label>
-    <label><input type="checkbox" class="f-country" value="Japan" checked>Japan</label>
-    <label><input type="checkbox" class="f-country" value="Italy" checked>Italy</label>
-    <label><input type="checkbox" class="f-country" value="Soviet Union" checked>Soviet Union</label>
+    <label><input type="checkbox" class="f-country" value="US" checked>United States</label>
+    <label><input type="checkbox" class="f-country" value="BRAZ" checked>Brazil</label>
+    <label><input type="checkbox" class="f-country" value="GER" checked>Germany</label>
+    <label><input type="checkbox" class="f-country" value="UK" checked>United Kingdom</label>
+    <label><input type="checkbox" class="f-country" value="FR" checked>France</label>
+    <label><input type="checkbox" class="f-country" value="JPN" checked>Japan</label>
+    <label><input type="checkbox" class="f-country" value="IT" checked>Italy</label>
+    <label><input type="checkbox" class="f-country" value="CIS" checked>Russia</label>
+    <label><input type="checkbox" class="f-country" value="PRC" checked>China</label>
     <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
   </div>
   <div class="ksd-divider"></div>
@@ -429,20 +593,29 @@ function getCheckedValues(selector) {
  * Side Effects:
  *   - Shows or hides Cesium entities in real time.
  */
+
+const activeAltBins = new Set(["0-200", "200-400", "400-800", "800-1200", "1200-2000", "2000+"]);
 function applyFilters() {
   const activeTypes = getCheckedValues(".f-type");
   const activeCountries = getCheckedValues(".f-country");
 
-  const entities = viewer.entities.values;
+
+  const entities = (MODE === "KESSLER")
+    ? kesslerDS.entities.values
+    : normalDS.entities.values;
+
   for (let i = 0; i < entities.length; i++) {
     const e = entities[i];
     if (!e.properties) continue;
 
-    const props = e.properties.getValue(Cesium.JulianDate.now());
+    const props = e.properties.getValue(viewer.clock.currentTime);
     const t = props.type;
     const c = props.country;
 
-    const show = activeTypes.includes(t) && activeCountries.includes(c);
+    const show =
+      activeTypes.includes(t) &&
+      activeCountries.includes(c) &&
+      activeAltBins.has(props.altBin);
     e.show = show;
   }
   updateCounter();
@@ -457,13 +630,19 @@ function applyFilters() {
  *   - Writes values into the counter UI
  */
 function updateCounter() {
-  const total = viewer.entities.values.filter(e => e.properties).length;
-  const visible = viewer.entities.values.filter(e => e.properties && e.show).length;
+  const entities = (MODE === "KESSLER")
+    ? kesslerDS.entities.values
+    : normalDS.entities.values;
+
+  const total = entities.filter(e => e.properties).length;
+  const visible = entities.filter(e => e.properties && e.show).length;
+
   const vEl = panel.querySelector("#ksd-visible");
   const tEl = panel.querySelector("#ksd-total");
   if (vEl) vEl.textContent = String(visible);
   if (tEl) tEl.textContent = String(total);
 }
+
 
 panel.addEventListener("change", ev => {
   if (
@@ -477,7 +656,7 @@ panel.addEventListener("change", ev => {
 
 
 // Methods for handling info popup menu. 
-window.addEventListener("load", () => { 
+window.addEventListener("load", () => {
   openPopup();
 });
 
@@ -491,30 +670,38 @@ function closePopup() {
   document.body.style.overflow = "auto";
 }
 
-// Kessler Syndrome Simulation button (no functionality yet)
-const ksdButton = document.createElement("button");
-ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
-ksdButton.title = "Simulate Kessler Syndrome";
-ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
-toolbar.appendChild(ksdButton);
-
 function createAltitudeLegend() {
   const legend = document.getElementById("altitude-legend");
-
-  const bins = [
-    { label: "< 200 km", color: Cesium.Color.DEEPSKYBLUE },
-    { label: "200 – 400 km", color: Cesium.Color.LIME },
-    { label: "400 – 800 km", color: Cesium.Color.YELLOW },
-    { label: "800 – 1200 km", color: Cesium.Color.ORANGE },
-    { label: "1200 – 2000 km", color: Cesium.Color.RED },
-    { label: "> 2000 km", color: Cesium.Color.MAGENTA }
-  ];
+  if (!legend) return;
 
   legend.innerHTML = "<b>Altitude (km)</b>";
 
+  const bins = [
+    { key: "0-200", label: "< 200 km", color: Cesium.Color.DEEPSKYBLUE },
+    { key: "200-400", label: "200 – 400 km", color: Cesium.Color.LIME },
+    { key: "400-800", label: "400 – 800 km", color: Cesium.Color.YELLOW },
+    { key: "800-1200", label: "800 – 1200 km", color: Cesium.Color.ORANGE },
+    { key: "1200-2000", label: "1200 – 2000 km", color: Cesium.Color.RED },
+    { key: "2000+", label: "> 2000 km", color: Cesium.Color.MAGENTA }
+  ];
+
   bins.forEach(bin => {
-    const item = document.createElement("div");
-    item.className = "legend-item";
+    const row = document.createElement("label");
+    row.className = "legend-item";
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "6px";
+
+    // THIS is the checkbox
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = true;
+
+    cb.addEventListener("change", () => {
+      if (cb.checked) activeAltBins.add(bin.key);
+      else activeAltBins.delete(bin.key);
+      applyFilters(); // re-filter entities
+    });
 
     const colorBox = document.createElement("div");
     colorBox.className = "legend-color";
@@ -523,14 +710,14 @@ function createAltitudeLegend() {
     const text = document.createElement("span");
     text.textContent = bin.label;
 
-    item.appendChild(colorBox);
-    item.appendChild(text);
-    legend.appendChild(item);
+    row.appendChild(cb);
+    row.appendChild(colorBox);
+    row.appendChild(text);
+    legend.appendChild(row);
   });
 }
 
 // createAltitudeLegend();
-
 window.addEventListener("load", async () => {
   createAltitudeLegend();
   await loadAndRenderTrajectories();
