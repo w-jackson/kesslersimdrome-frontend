@@ -595,10 +595,33 @@ function getCheckedValues(selector) {
  */
 
 const activeAltBins = new Set(["0-200", "200-400", "400-800", "800-1200", "1200-2000", "2000+"]);
-function applyFilters() {
-  const activeTypes = getCheckedValues(".f-type");
-  const activeCountries = getCheckedValues(".f-country");
 
+// OLD filter code → normalized entity values
+const TYPE_CODE_MAP = {
+  "PAY": "Active",
+  "R/B": "Junk"
+};
+
+const COUNTRY_CODE_MAP = {
+  "US": "United States",
+  "UK": "United Kingdom",
+  "FR": "France",
+  "GER": "Germany",
+  "JPN": "Japan",
+  "IT": "Italy",
+  "BRAZ": "Brazil",
+  "CIS": "Soviet Union",
+  "PRC": "China",
+  "Other": "Other"
+};
+
+function applyFilters() {
+  const rawTypes = getCheckedValues(".f-type");
+  const rawCountries = getCheckedValues(".f-country");
+
+  // Translate OLD codes → entity values
+  const activeTypes = rawTypes.map(t => TYPE_CODE_MAP[t]).filter(Boolean);
+  const activeCountries = rawCountries.map(c => COUNTRY_CODE_MAP[c]).filter(Boolean);
 
   const entities = (MODE === "KESSLER")
     ? kesslerDS.entities.values
@@ -609,15 +632,16 @@ function applyFilters() {
     if (!e.properties) continue;
 
     const props = e.properties.getValue(viewer.clock.currentTime);
-    const t = props.type;
-    const c = props.country;
+    if (!props) continue;
 
     const show =
-      activeTypes.includes(t) &&
-      activeCountries.includes(c) &&
+      activeTypes.includes(props.type) &&
+      activeCountries.includes(props.country) &&
       activeAltBins.has(props.altBin);
+
     e.show = show;
   }
+
   updateCounter();
 }
 
