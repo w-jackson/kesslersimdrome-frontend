@@ -138,110 +138,201 @@ function applySnapshot(snapshot) {
   applyFilters();
 }
 
-// FOR DEV PURPOSES ONLY: Simulate Kessler syndrome with fake data
-function startFakeKesslerStream(seedIds = [20580, 25544], count = 50) {
-  stopLiveUpdates();
-  MODE = "KESSLER";
+function kmEciToCartographicMeters(posKm) {
+  const cart = new Cesium.Cartesian3(
+    posKm[0] * 1000.0,
+    posKm[1] * 1000.0,
+    posKm[2] * 1000.0
+  );
 
-  // hide normal, show kessler
-  normalDS.show = false;
-  kesslerDS.show = true;
+  // Sometimes (ex: [0,0,0]) Cartographic conversion fails
+  let carto = Cesium.Cartographic.fromCartesian(cart);
 
-  // clear only kessler entities
-  clearKesslerObjectsOnly();
-
-
-  // Make some fake objects around earth
-  const objects = [];
-  for (let i = 0; i < count; i++) {
-    const id = i < seedIds.length ? seedIds[i] : 900000 + i;
-    objects.push({
-      id,
-      lat: (Math.random() * 180) - 90,
-      lon: (Math.random() * 360) - 180,
-      alt: 200000 + Math.random() * 1800000, // 200km–2000km
-      type: i % 3 === 0 ? "Active" : "Junk",
-      country: "Other",
-      // motion params:
-      dlon: (Math.random() * 1.5 + 0.2) * (Math.random() < 0.5 ? -1 : 1),
-      dlat: (Math.random() * 0.5) * (Math.random() < 0.5 ? -1 : 1),
-    });
+  // Fallback: approximate altitude from radius
+  if (!carto) {
+    const r = Cesium.Cartesian3.magnitude(cart);
+    const earthR = Cesium.Ellipsoid.WGS84.maximumRadius;
+    const height = r - earthR;
+    carto = new Cesium.Cartographic(0, 0, height);
   }
 
-  LIVE_TIMER = setInterval(() => {
-    // move them a little each tick
-    for (const o of objects) {
-      o.lon += o.dlon;
-      o.lat += o.dlat;
+  return { cart, carto };
+}
 
-      if (o.lon > 180) o.lon -= 360;
-      if (o.lon < -180) o.lon += 360;
-      if (o.lat > 90) o.lat = 90;
-      if (o.lat < -90) o.lat = -90;
 
-      // alt wiggle
-      o.alt += (Math.random() - 0.5) * 2000;
-      o.alt = Math.max(160000, Math.min(2200000, o.alt));
+// FOR DEV PURPOSES ONLY: Simulate Kessler syndrome with fake data
+let KESSLER_ABORT = null;
+//// ---- KESSLER SPEED CONTROLS ----
+//const KESSLER_FPS = 2;           // updates per second (1–4 recommended)
+//const KESSLER_FRAME_MS = 1000 / KESSLER_FPS;
+//const KESSLER_SPEED_SCALE = 0.05; // movement multiplier
+
+async function startKesslerStreamFromAPI() {
+ //stopLiveUpdates();
+ //
+ //MODE = "KESSLER";
+ //normalDS.show = false;
+ //kesslerDS.show = true;
+ //clearKesslerObjectsOnly();
+ //
+ //console.log("Loading fake Kessler JSON");
+ //
+ //const res = await fetch("fake_kessler.json");
+ //const data = await res.json();
+ //
+ //if (!Array.isArray(data.frames)) {
+ //  console.error("Invalid fake kessler file");
+ //  return;
+ //}
+ //
+ //let frameIndex = 0;
+ //
+ //LIVE_TIMER = setInterval(() => {
+ //  const frame = data.frames[frameIndex];
+ //  if (!frame) {
+ //    console.log("Fake Kessler finished");
+ //    stopLiveUpdates();
+ //    return;
+ //  }
+ //
+ //  // Apply frame
+ //  frame.objects.forEach((pair, i) => {
+ //    const posKm = pair[0];
+ //    const velKmps = pair[1];
+ //    upsertLiveDotFromBackend(i, posKm, velKmps);
+ //  });
+ //
+ //  applyFilters();
+ //
+ //  frameIndex++;
+ //}, KESSLER_FRAME_MS); // 3–4 Hz, adjustable
+  //// stop previous if any
+  stopLiveUpdates();
+  if (KESSLER_ABORT) KESSLER_ABORT.abort();
+
+  MODE = "KESSLER";
+  normalDS.show = false;
+  kesslerDS.show = true;
+  clearKesslerObjectsOnly();
+
+  KESSLER_ABORT = new AbortController();
+
+  const res = await fetch("http://localhost:3000/api/v1/simulation/stream", {
+    signal: KESSLER_ABORT.signal,
+    headers: { "Accept": "application/x-ndjson" }
+  });
+
+  if (!res.ok || !res.body) {
+    throw new Error(`Stream HTTP ${res.status}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // split by newline (NDJSON)
+    let idx;
+    while ((idx = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+
+      if (!line) continue;
+
+      let msg;
+      try {
+        msg = JSON.parse(line);
+      } catch (e) {
+        console.warn("Bad JSON line:", line);
+        continue;
+      }
+
+      // Example: {"status":"simulation_started"}
+      if (msg.status) {
+        console.log("Kessler:", msg.status);
+        continue;
+      }
+
+      // Frame update
+      if (Array.isArray(msg.objects)) {
+        // msg.objects: [ [ [x,y,z],[vx,vy,vz] ], ... ]
+        for (let i = 0; i < msg.objects.length; i++) {
+          const pair = msg.objects[i];
+          const pos = pair[0];
+          const vel = pair[1];
+
+          // If backend doesn’t send IDs, you can synthesize one:
+          const id = i; // better: backend should send an id per object
+          upsertLiveDotFromBackend(id, pos, vel);
+        }
+        applyFilters();
+      }
     }
-
-    applySnapshot({ objects });
-  }, 200); // 5 Hz
+  }
+  console.log("Kessler stream ended");
 }
 
 // Upsert a live-updating dot entity for Kessler mode
-function upsertLiveDot(o) {
-  const id = String(o.id);
-  const p = Cesium.Cartesian3.fromDegrees(o.lon, o.lat, o.alt);
+function upsertLiveDotFromBackend(id, posKm, velKmps, meta = {}) {
+  const { cart, carto } = kmEciToCartographicMeters(posKm);
+  const height = Number.isFinite(carto?.height) ? carto.height : 0;
 
-  let e = LIVE_ENTITY_BY_ID.get(id);
+
+  const type = normalizeTypeForDev(meta.type ?? "Junk");
+  const country = normalizeCountryForDev(meta.country ?? "Other");
+
+  let e = LIVE_ENTITY_BY_ID.get(String(id));
   if (!e) {
-    // Create dot entity once
     e = kesslerDS.entities.add({
-      id,
-      name: id,
-      position: new Cesium.ConstantPositionProperty(p),
+      id: String(id),
+      name: String(id),
+      position: new Cesium.ConstantPositionProperty(cart),
 
       point: {
-        pixelSize: sizeByType(normalizeTypeForDev(o.type)),
-        color: altitudeToColorMeters(o.alt), // <-- no CallbackProperty in Kessler mode
+        pixelSize: sizeByType(type),
+        color: altitudeToColorMeters(height),
         outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
         outlineWidth: 1,
         disableDepthTestDistance: 0
       },
 
       properties: new Cesium.PropertyBag({
-        id: o.id,
-        type: normalizeTypeForDev(o.type),
-        country: normalizeCountryForDev(o.country),
-        altBin: altitudeToBin(o.alt)
+        id,
+        type,
+        country,
+        altBin: altitudeToBin(height),
+        // optional debug
+        vx: velKmps?.[0] ?? 0,
+        vy: velKmps?.[1] ?? 0,
+        vz: velKmps?.[2] ?? 0
       })
     });
 
-    LIVE_ENTITY_BY_ID.set(id, e);
+    LIVE_ENTITY_BY_ID.set(String(id), e);
   } else {
-    // Update position fast
-    e.position.setValue(p);
-
-    // If you want filters to reflect changing altitude bins, update altBin too:
-    e.properties.altBin = altitudeToBin(o.alt);
-
-    // Update color by altitude (cheap; runs only per update tick)
-    e.point.color = altitudeToColorMeters(o.alt);
+    e.position.setValue(cart);
+    e.properties.altBin = altitudeToBin(carto.height);
+    e.point.color = altitudeToColorMeters(carto.height);
   }
 }
+
 
 // Return to normal mode from Kessler mode
 async function returnToNormalMode() {
   if (MODE === "NORMAL") return;
 
-  console.log("Returning to NORMAL mode");
+  if (KESSLER_ABORT) KESSLER_ABORT.abort();
+  KESSLER_ABORT = null;
 
   stopLiveUpdates();
   clearKesslerObjectsOnly();
 
   MODE = "NORMAL";
-
-  // show normal, hide kessler (NO refetch/rebuild)
   kesslerDS.show = false;
   normalDS.show = true;
 
@@ -493,7 +584,7 @@ backgroundBtn.textContent = "Info";
 backgroundBtn.addEventListener("click", openPopup);
 toolbar.appendChild(backgroundBtn);
 
-// Kessler Syndrome Simulation button (no functionality yet)
+// Kessler Syndrome Simulation button 
 const ksdButton = document.createElement("button");
 ksdButton.className = "cesium-button cesium-button cesium-toolbar-button";
 ksdButton.title = "Simulate Kessler Syndrome";
@@ -501,16 +592,18 @@ ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
 toolbar.appendChild(ksdButton);
 
 ksdButton.addEventListener("click", async () => {
-  if (MODE === "NORMAL") {
-    // Enter Kessler mode (fake for now)
-    startFakeKesslerStream([20580, 25544], 200);
-    ksdButton.classList.add("active");
-    ksdButton.title = "Exit Kessler Simulation";
-  } else {
-    // Exit Kessler mode
-    await returnToNormalMode();
-    ksdButton.classList.remove("active");
-    ksdButton.title = "Simulate Kessler Syndrome";
+  try {
+    if (MODE === "NORMAL") {
+      await startKesslerStreamFromAPI();   
+      ksdButton.classList.add("active");
+      ksdButton.title = "Exit Kessler Simulation";
+    } else {
+      await returnToNormalMode();
+      ksdButton.classList.remove("active");
+      ksdButton.title = "Simulate Kessler Syndrome";
+    }
+  } catch (err) {
+    console.error("Kessler toggle failed:", err);
   }
 });
 
