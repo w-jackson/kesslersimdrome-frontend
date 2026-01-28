@@ -448,8 +448,7 @@ async function loadAndRenderTrajectories() {
         model: modelUri
           ? {
             uri: modelUri,
-            minimumPixelSize: 1000,
-            maximumScale: 5000
+            minimumPixelSize: 100,
           }
           : undefined,
 
@@ -659,6 +658,59 @@ toolbar.addEventListener("click", (e) => {
   if (isPanelOpen()) closePanel();
 });
 
+// Add slider container
+const sliderContainer = document.createElement("div");
+sliderContainer.className = "ksd-slider-container";
+sliderContainer.style.marginTop = "10px";
+sliderContainer.innerHTML = `
+  <label for="ksd-limit-slider">Object Count: <span id="ksd-slider-value">14128</span></label>
+  <input type="range" id="ksd-limit-slider" min="0" max="14128" value="14128" step="1">
+`;
+panel.appendChild(sliderContainer);
+
+let maxVisibleObjects = 14128; // initial value matches slider default
+
+const slider = document.getElementById("ksd-limit-slider");
+const sliderValueEl = document.getElementById("ksd-slider-value");
+
+slider.addEventListener("input", () => {
+  maxVisibleObjects = Number(slider.value);
+  sliderValueEl.textContent = maxVisibleObjects;
+  applyFilters(); // re-filter entities with new limit
+});
+
+slider.addEventListener("dblclick", () => {
+  const current = Number(slider.value);
+
+  const input = window.prompt(
+    "Enter a max objects value (0 – 14128):",
+    String(current)
+  );
+  if (input === null) return; // user cancelled
+
+  const value = Number.parseInt(input, 10);
+
+  // Validate input
+  if (!Number.isFinite(value) || String(value) !== input.trim()) {
+    window.alert("Please enter a valid INTEGER.");
+    return;
+  }
+
+  if (value < 0 || value > 14128) {
+    window.alert("Value must be between 0 and 14128.");
+    return;
+  }
+
+  // Update slider and maxVisibleObjects
+  slider.value = value;
+  maxVisibleObjects = value;
+  sliderValueEl.textContent = maxVisibleObjects;
+
+  // Reapply filters
+  applyFilters();
+});
+
+
 /**
  * Utility function: return all checked checkbox values for a category.
  *
@@ -712,13 +764,14 @@ function applyFilters() {
   const rawTypes = getCheckedValues(".f-type");
   const rawCountries = getCheckedValues(".f-country");
 
-  // Translate OLD codes → entity values
   const activeTypes = rawTypes.map(t => TYPE_CODE_MAP[t]).filter(Boolean);
   const activeCountries = rawCountries.map(c => COUNTRY_CODE_MAP[c]).filter(Boolean);
 
   const entities = (MODE === "KESSLER")
     ? kesslerDS.entities.values
     : normalDS.entities.values;
+
+  let shownCount = 0;
 
   for (let i = 0; i < entities.length; i++) {
     const e = entities[i];
@@ -727,16 +780,23 @@ function applyFilters() {
     const props = e.properties.getValue(viewer.clock.currentTime);
     if (!props) continue;
 
-    const show =
+    const passesFilters =
       activeTypes.includes(props.type) &&
       activeCountries.includes(props.country) &&
       activeAltBins.has(props.altBin);
 
-    e.show = show;
+    // Limit the number of visible entities
+    if (passesFilters && shownCount < maxVisibleObjects) {
+      e.show = true;
+      shownCount++;
+    } else {
+      e.show = false;
+    }
   }
 
   updateCounter();
 }
+
 
 /**
  * Update the "Visible / Total" counter in the filter panel.
