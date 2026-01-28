@@ -213,6 +213,7 @@ async function startKesslerStreamFromAPI() {
   MODE = "KESSLER";
   normalDS.show = false;
   kesslerDS.show = true;
+  hideTimeUI();
   clearKesslerObjectsOnly();
 
   KESSLER_ABORT = new AbortController();
@@ -335,7 +336,7 @@ async function returnToNormalMode() {
   MODE = "NORMAL";
   kesslerDS.show = false;
   normalDS.show = true;
-
+  showTimeUI();
   applyFilters();
 }
 
@@ -797,6 +798,40 @@ function applyFilters() {
   updateCounter();
 }
 
+/**
+ * Hide Cesium time-related UI widgets (timeline + animation controls).
+ *
+ * Used when entering Kessler mode, where time is driven by a live
+ * simulation stream and the standard Cesium clock controls would
+ * be misleading or non-functional.
+ *
+ * Safe to call multiple times.
+ */
+function hideTimeUI() {
+  if (viewer.timeline) {
+    viewer.timeline.container.style.display = "none";
+  }
+  if (viewer.animation) {
+    viewer.animation.container.style.display = "none";
+  }
+}
+
+/**
+ * Restore Cesium time-related UI widgets (timeline + animation controls).
+ *
+ * Used when returning to NORMAL mode, where orbit trajectories are
+ * time-sampled and user-controlled playback is valid again.
+ *
+ * Restores default display state without recreating the viewer.
+ */
+function showTimeUI() {
+  if (viewer.timeline) {
+    viewer.timeline.container.style.display = "";
+  }
+  if (viewer.animation) {
+    viewer.animation.container.style.display = "";
+  }
+}
 
 /**
  * Update the "Visible / Total" counter in the filter panel.
