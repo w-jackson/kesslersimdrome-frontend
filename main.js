@@ -664,7 +664,7 @@ sliderContainer.className = "ksd-slider-container";
 sliderContainer.style.marginTop = "10px";
 sliderContainer.innerHTML = `
   <label for="ksd-limit-slider">Object Count: <span id="ksd-slider-value">14128</span></label>
-  <input type="range" id="ksd-limit-slider" min="0" max="14128" value="14128" step="1">
+  <input type="range" id="ksd-limit-slider" min="0" max="50000" value="14128" step="1">
 `;
 panel.appendChild(sliderContainer);
 
