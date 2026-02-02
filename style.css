@@ -159,3 +159,23 @@ html, body, #cesiumContainer {
   width: 80px;           
   height: auto;
 }
+
+.ksd-info-box {
+  position: absolute;
+  top: 90px;
+  right: 12px;
+  background: rgba(25, 25, 25, 0.85);
+  color: white;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  z-index: 10;
+  min-width: 180px;
+}
+
+.ksd-info-box h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+

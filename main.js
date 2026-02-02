@@ -216,6 +216,9 @@ async function startKesslerStreamFromAPI() {
   hideTimeUI();
   clearKesslerObjectsOnly();
 
+  // Show simulation info box. 
+  infoBox.style.display = "block";
+
   KESSLER_ABORT = new AbortController();
 
   const res = await fetch("http://localhost:3000/api/v1/simulation/stream", {
@@ -261,6 +264,16 @@ async function startKesslerStreamFromAPI() {
 
       // Frame update
       if (Array.isArray(msg.objects)) {
+        // Update info box if stats exist
+        updateSimulationInfo({
+          totalObjects: msg.object_count,
+          totalCollisions: msg.total_num_collisions,
+          stepCollisions: msg.step_num_collision
+        });
+
+        // Update slider max to reflect the number of objects. 
+        document.getElementById('ksd-limit-slider').max = msg.object_count;
+
         // msg.objects: [ [ [x,y,z],[vx,vy,vz] ], ... ]
         for (let i = 0; i < msg.objects.length; i++) {
           const pair = msg.objects[i];
@@ -325,6 +338,13 @@ function upsertLiveDotFromBackend(id, posKm, velKmps, meta = {}) {
 
 // Return to normal mode from Kessler mode
 async function returnToNormalMode() {
+
+  updateSimulationInfo({
+  totalObjects: "—",
+  totalCollisions: "—",
+  stepCollisions: "—"
+  });
+
   if (MODE === "NORMAL") return;
 
   if (KESSLER_ABORT) KESSLER_ABORT.abort();
@@ -337,6 +357,10 @@ async function returnToNormalMode() {
   kesslerDS.show = false;
   normalDS.show = true;
   showTimeUI();
+
+  // Hide simulation info box. 
+  infoBox.style.display = "none";
+
   applyFilters();
 }
 
@@ -594,9 +618,9 @@ toolbar.appendChild(ksdButton);
 ksdButton.addEventListener("click", async () => {
   try {
     if (MODE === "NORMAL") {
-      await startKesslerStreamFromAPI();   
       ksdButton.classList.add("active");
       ksdButton.title = "Exit Kessler Simulation";
+      await startKesslerStreamFromAPI();   
     } else {
       await returnToNormalMode();
       ksdButton.classList.remove("active");
@@ -634,6 +658,35 @@ panel.innerHTML = `
 viewer.container.appendChild(panel);
 
 panel.style.display = "none";
+
+// --- Simulation Info Box ---
+const infoBox = document.createElement("div");
+infoBox.className = "ksd-info-box";
+infoBox.innerHTML = `
+  <h4>Simulation Info</h4>
+  <div><strong>Total Objects:</strong> <span id="ksd-info-objects">—</span></div>
+  <div><strong>Total Collisions:</strong> <span id="ksd-info-collisions">—</span></div>
+  <div><strong>Step Collisions:</strong> <span id="ksd-info-step">—</span></div>
+`;
+infoBox.style.display = "none";
+viewer.container.appendChild(infoBox);
+
+// Function for updating simulation info box. 
+function updateSimulationInfo({
+  totalObjects,
+  totalCollisions,
+  stepCollisions
+}) {
+  if (totalObjects !== undefined) {
+    document.getElementById("ksd-info-objects").textContent = totalObjects;
+  }
+  if (totalCollisions !== undefined) {
+    document.getElementById("ksd-info-collisions").textContent = totalCollisions;
+  }
+  if (stepCollisions !== undefined) {
+    document.getElementById("ksd-info-step").textContent = stepCollisions;
+  }
+}
 
 function isPanelOpen() {
   return panel.style.display !== "none" && panel.style.display !== "";
@@ -846,7 +899,8 @@ function updateCounter() {
     ? kesslerDS.entities.values
     : normalDS.entities.values;
 
-  const total = entities.filter(e => e.properties).length;
+  // const total = entities.filter(e => e.properties).length;
+  const total = document.getElementById('ksd-limit-slider').max
   const visible = entities.filter(e => e.properties && e.show).length;
 
   const vEl = panel.querySelector("#ksd-visible");
