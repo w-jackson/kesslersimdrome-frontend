@@ -26,6 +26,7 @@
 Cesium.Ion.defaultAccessToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI0ZjEyYjkwZC01NGFjLTQ5MzctYjc2NC1lZjI3ZGRhY2I1ODQiLCJpZCI6MzUwMTQwLCJpYXQiOjE3NjAzODMzNTN9.9hsNVl87F-JcB2pljRrS4dywTaCb_ZqWmZWP_t97svU";
 
 const viewer = new Cesium.Viewer("cesiumContainer", {
+  geocoder: false,   // Disables built-in search button. 
   creditContainer: document.createElement("div"),
   imageryProvider: new Cesium.IonImageryProvider({ assetId: 3 }),
   shouldAnimate: true,
@@ -272,7 +273,7 @@ async function startKesslerStreamFromAPI() {
         });
 
         // Update slider max to reflect the number of objects. 
-        document.getElementById('ksd-limit-slider').max = msg.object_count;
+        updateSliderMax(msg.object_count);
 
         // msg.objects: [ [ [x,y,z],[vx,vy,vz] ], ... ]
         for (let i = 0; i < msg.objects.length; i++) {
@@ -514,6 +515,8 @@ viewer.clock.onTick.addEventListener(() => {
   }
 });
 
+
+
 /**
  * -------------------------------------------------------------------------
  * Filter System (Type & Country Filters)
@@ -556,6 +559,39 @@ viewer.clock.onTick.addEventListener(() => {
  */
 
 const toolbar = viewer.container.querySelector(".cesium-viewer-toolbar");
+
+const viewerContainer = viewer.container;
+
+// Make search container. 
+const searchContainer = document.createElement("div");
+searchContainer.className = "ksd-search-floating";
+
+searchContainer.innerHTML = `
+  <input
+    id="ksd-search"
+    type="text"
+    placeholder="Search ID or name"
+  />
+  <button class="cesium-button cesium-toolbar-button">Go</button>
+`;
+
+viewerContainer.appendChild(searchContainer);
+
+// Connect search UI to logic. 
+const searchInput = document.getElementById("ksd-search");
+const searchButton = searchContainer.querySelector("button");
+
+searchButton.addEventListener("click", runNormalSearch);
+
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") runNormalSearch();
+});
+
+// Set initial value. 
+setNormalSearchEnabled(true);
+
+
+
 
 // --- Allow user to type a custom time speed by double-clicking the Cesium clock ---
 const animationWidget = viewer.animation;
@@ -615,15 +651,18 @@ ksdButton.title = "Simulate Kessler Syndrome";
 ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
 toolbar.appendChild(ksdButton);
 
+// All listener to ksd button.
 ksdButton.addEventListener("click", async () => {
   try {
     if (MODE === "NORMAL") {
       ksdButton.classList.add("active");
       ksdButton.title = "Exit Kessler Simulation";
-      await startKesslerStreamFromAPI();   
+      setNormalSearchEnabled(false);
+      await startKesslerStreamFromAPI();
     } else {
       await returnToNormalMode();
       ksdButton.classList.remove("active");
+      setNormalSearchEnabled(true);
       ksdButton.title = "Simulate Kessler Syndrome";
     }
   } catch (err) {
@@ -712,6 +751,19 @@ toolbar.addEventListener("click", (e) => {
   if (isPanelOpen()) closePanel();
 });
 
+// Add 'show all objects' check box.
+const lockMaxContainer = document.createElement("div");
+lockMaxContainer.className = "ksd-lock-max";
+lockMaxContainer.style.marginTop = "6px";
+lockMaxContainer.innerHTML = `
+  <label>
+    <input type="checkbox" id="ksd-lock-max">
+    Always show all objects
+  </label>
+`;
+panel.appendChild(lockMaxContainer);
+
+
 // Add slider container
 const sliderContainer = document.createElement("div");
 sliderContainer.className = "ksd-slider-container";
@@ -763,6 +815,26 @@ slider.addEventListener("dblclick", () => {
   // Reapply filters
   applyFilters();
 });
+
+
+// Snap slider all the way to the right when 'show all objects' box is selected. 
+let lockSliderToMax = false;
+const lockCheckbox = document.getElementById("ksd-lock-max");
+lockCheckbox.addEventListener("change", () => {
+  lockSliderToMax = lockCheckbox.checked;
+
+  // Disable / enable slider
+  slider.disabled = lockSliderToMax;
+
+  if (lockSliderToMax) {
+    slider.value = slider.max;
+    maxVisibleObjects = Number(slider.max);
+    sliderValueEl.textContent = maxVisibleObjects;
+  }
+
+  applyFilters();
+});
+
 
 
 /**
@@ -868,6 +940,109 @@ function hideTimeUI() {
     viewer.animation.container.style.display = "none";
   }
 }
+
+
+// Get list of object in NORMAL mode. 
+function getNormalEntities() {
+  if (MODE !== "NORMAL") return [];
+  return normalDS.entities.values;
+}
+
+// Allow the user to search up an item by ID or NAME. 
+function findNormalEntity(query) {
+  if (MODE !== "NORMAL") return null;
+  if (!query) return null;
+
+  const q = query.trim().toLowerCase();
+
+  for (const e of getNormalEntities()) {
+    // Name match (partial, case-insensitive)
+    if (e.name && e.name.toLowerCase().includes(q)) {
+      return e;
+    }
+
+    // ID match
+    if (e.properties) {
+      const props = e.properties.getValue(viewer.clock.currentTime);
+      if (props?.id !== undefined && String(props.id) === q) {
+        return e;
+      }
+    }
+  }
+
+  return null;
+}
+
+// 'Zoom into an entity'
+function focusOnNormalEntity(entity) {
+  if (!entity || MODE !== "NORMAL") return;
+
+  // Ensure visible even if filters hid it
+  entity.show = true;
+
+  viewer.selectedEntity = entity;
+
+  viewer.flyTo(entity, {
+    duration: 1.5,
+    offset: new Cesium.HeadingPitchRange(
+      0,
+      Cesium.Math.toRadians(-45),
+      500000
+    )
+  });
+}
+
+// Search feature handler. 
+function runNormalSearch() {
+  if (MODE !== "NORMAL") {
+    window.alert("Search is only available in NORMAL mode.");
+    return;
+  }
+
+  const input = document.getElementById("ksd-search");
+  const query = input.value;
+
+  const entity = findNormalEntity(query);
+
+  if (!entity) {
+    window.alert(`No satellite found for "${query}"`);
+    return;
+  }
+
+  focusOnNormalEntity(entity);
+}
+
+// Disable search when in KESSLER mode. 
+function setNormalSearchEnabled(enabled) {
+  if (!searchInput || !searchButton) return;
+
+  searchInput.disabled = !enabled;
+  searchButton.disabled = !enabled;
+
+  if (enabled) {
+    // Attach back if it was removed
+    if (!viewer.container.contains(searchContainer)) {
+      viewer.container.appendChild(searchContainer);
+    }
+  } else {
+    // Remove completely
+    if (viewer.container.contains(searchContainer)) {
+      viewer.container.removeChild(searchContainer);
+    }
+  }
+}
+
+// Update slider max to reflect the number of objects. 
+function updateSliderMax(newMax) {
+  slider.max = newMax;
+
+  if (lockSliderToMax) {
+    slider.value = newMax;
+    maxVisibleObjects = newMax;
+    sliderValueEl.textContent = newMax;
+  }
+}
+
 
 /**
  * Restore Cesium time-related UI widgets (timeline + animation controls).

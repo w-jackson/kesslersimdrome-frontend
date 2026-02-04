@@ -179,3 +179,28 @@ html, body, #cesiumContainer {
   border-bottom: 1px solid rgba(255,255,255,0.2);
 }
 
+.ksd-search-floating {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  z-index: 5; /* above globe, below modals */
+}
+
+.ksd-search-floating input {
+  width: 220px;
+  padding: 6px 8px;
+
+  border-radius: 4px;
+  border: 1px solid #888;
+
+  background: #2b2b2b;
+  color: #fff;
+}
+
+
