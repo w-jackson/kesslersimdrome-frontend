@@ -27,44 +27,78 @@
 </head>
 <body>
 
-  <div id="popup" class="popup-overlay">
+<div id="popup" class="popup-overlay">
   <div class="popup-box">
     <button class="close-btn" onclick="closePopup()">✕</button>
 
-    <!-- Header with logo on the left -->
     <div class="popup-header">
       <img src="./assets/ksd_logo.png" alt="Logo Image" id="info_page_logo_image">
       <h2>KesslerSIMDrome</h2>
     </div>
 
+    <!-- Tabs -->
+    <div class="popup-tabs" role="tablist" aria-label="Info Tabs">
+      <button class="popup-tab active" data-tab="tab-desc" role="tab" aria-selected="true">Description</button>
+      <button class="popup-tab" data-tab="tab-how" role="tab" aria-selected="false">How to Use</button>
+      <button class="popup-tab" data-tab="tab-terms" role="tab" aria-selected="false">Terminology</button>
+      <button class="popup-tab" data-tab="tab-sources" role="tab" aria-selected="false">Sources</button>
+      <button class="popup-tab" data-tab="tab-authors" role="tab" aria-selected="false">Authors</button>
+    </div>
+
     <div class="popup-content">
-      <h3>Project Description</h3>
-      <p>
-        KesslerSimDrome is an interactive simulation platform designed to visualize and analyze low-Earth orbit (LEO) space debris. The system targets two main groups of stakeholders: 1. students and educators seeking accessible tools to explore orbital mechanics and 2. space enthusiasts interested in visualizing satellites and space debris.
-        The project addresses key challenges these stakeholders face. Students and educators often lack interactive resources to demonstrate orbital dynamics and debris behavior. In addition, the public has minimal exposure to the scale and risks of orbital debris.
-      </p>
-      <p>
-        KesslerSimDrome overcomes these barriers by providing real-time simulations with features such as time scaling, debris filtering, and ground track visualization Users can create custom simulations using either manually added debris or publicly available datasets, while real-time satellite position data enhances realism and educational value.
-      </p>
-      <p> 
-        By combining accurate physics-based modeling with intuitive, visual interfaces, KesslerSimDrome enables stakeholders to explore orbital environments and assess collision risks. This project not only serves as an educational tool but also fosters greater awareness of the hazards posed by space debris, making it a compelling and impactful capstone project. <br><br>
-      </p>
-      
-      <br>
-      <h3>Important Terminology</h3>
-      <p><b>LEO(Low Earth Orbit): </b>Low Earth Orbit (LEO) is an orbit around Earth at an altitude typically ranging from 160 km to 2,000 km above the surface.  It is the closest region of space to Earth.</p>
-      <p><b>GEO(Geosynchronous orbit): </b> A geosynchronous orbit(GEO) is an Earth-centered orbit with an orbital period that matches Earth's rotation on its axis.  </p>
-      <p><b>Kessler Syndrome: </b>Kessler Syndrome is a theoretical scenario in which the density of objects in low Earth orbit (LEO) becomes so high that collisions between space debris trigger a self-sustaining cascade of further collisions.  Each collision generates more debris, increasing the likelihood of additional impacts, which can render LEO increasingly hazardous or even unusable for future space missions.</p>
-      <p><b>Rocket Body: </b>Spent upper stage rocket or booster. VERY high collision risk.</p>
+      <!-- Description -->
+      <section id="tab-desc" class="popup-tabpanel active" role="tabpanel">
+        <h3>Project Description</h3>
+        <p>
+          KesslerSimDrome is an interactive simulation platform designed to visualize and analyze low-Earth orbit (LEO) space debris...
+        </p>
+        <p>
+          KesslerSimDrome overcomes these barriers by providing real-time simulations with features such as time scaling, debris filtering...
+        </p>
+        <p>
+          By combining accurate physics-based modeling with intuitive, visual interfaces, KesslerSimDrome enables stakeholders to explore orbital environments...
+        </p>
+      </section>
 
-      <br>
-      <h3>Sources</h3>
-      <p><b>CelesTrak: </b>Used for satellite data. Link: <i>https://celestrak.org/</i></p>
-      <p><b>Nasa Models: </b>Used several of Nasa's publicly available 3D models. Link <i>https://science.nasa.gov/3d-resources/</i></p>
+      <!-- How to Use -->
+      <section id="tab-how" class="popup-tabpanel" role="tabpanel">
+        <h3>How to Use</h3>
+        <ul>
+          <li><b>Move camera:</b> Left-drag to rotate, scroll to zoom, right-drag to pan.</li>
+          <li><b>Time controls:</b> Use the timeline/animation widgets to scrub orbit time.</li>
+          <li><b>Change speed:</b> Drag the speed slider (bottom-left). Double-click the clock to type an exact speed.</li>
+          <li><b>Filters:</b> Click the filter icon in the toolbar to show/hide objects by <b>Type</b>, <b>Country</b>, and <b>Altitude</b>.</li>
+          <li><b>Altitude legend:</b> Use the colored legend checkboxes to toggle altitude ranges.</li>
+          <li><b>Limit objects:</b> Use the <b>Object Count</b> slider to cap visible entities for performance.</li>
+          <li><b>Search (NORMAL mode):</b> Use the floating search box to find a satellite by name or ID and zoom to it.</li>
+          <li><b>Kessler Simulation:</b> Click the Kessler button to enter live mode. Time UI hides; simulation stats appear.</li>
+        </ul>
+        <p style="margin-top:10px;">
+          Tip: If objects “disappear,” check your filters and the Object Count slider.
+        </p>
+      </section>
 
-      <br>
-      <h3>Authors</h3>
-      <p>Rishab Dixit, Roy Hoang, Samuel Dutson, Will Jackson</p>
+      <!-- Terminology -->
+      <section id="tab-terms" class="popup-tabpanel" role="tabpanel">
+        <h3>Important Terminology</h3>
+        <p><b>LEO (Low Earth Orbit):</b> Typically 160 km to 2,000 km above Earth.</p>
+        <p><b>GEO (Geosynchronous Orbit):</b> Orbit with period matching Earth’s rotation.</p>
+        <p><b>Kessler Syndrome:</b> Cascading collisions generating more debris, increasing future collision risk.</p>
+        <p><b>Rocket Body:</b> Spent upper stage rocket/booster; high collision risk.</p>
+      </section>
+
+      <!-- Sources -->
+      <section id="tab-sources" class="popup-tabpanel" role="tabpanel">
+        <h3>Sources</h3>
+        <p><b>CelesTrak:</b> Used for satellite data. <i>https://celestrak.org/</i></p>
+        <p><b>NASA Models:</b> Used several public 3D models. <i>https://science.nasa.gov/3d-resources/</i></p>
+      </section>
+
+      <!-- Authors -->
+      <section id="tab-authors" class="popup-tabpanel" role="tabpanel">
+        <h3>Authors</h3>
+        <p>Rishab Dixit, Roy Hoang, Samuel Dutson, Will Jackson</p>
+      </section>
     </div>
   </div>
 </div>

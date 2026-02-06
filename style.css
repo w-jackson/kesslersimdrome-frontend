@@ -160,6 +160,36 @@ html, body, #cesiumContainer {
   height: auto;
 }
 
+/* Popup tabs */
+.popup-tabs{
+  display:flex;
+  gap:6px;
+  padding:10px 14px 0 14px;
+  flex-wrap:wrap;
+}
+
+.popup-tab{
+  border:none;
+  cursor:pointer;
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(255,255,255,0.10);
+  color:#fff;
+  font-weight:600;
+}
+
+.popup-tab.active{
+  background:rgba(255,255,255,0.22);
+}
+
+.popup-tabpanel{
+  display:none;
+}
+
+.popup-tabpanel.active{
+  display:block;
+}
+
 .ksd-info-box {
   position: absolute;
   top: 90px;
