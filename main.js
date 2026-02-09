@@ -280,6 +280,7 @@ async function startKesslerStreamFromAPI() {
 
   // Show simulation info box
   infoBox.style.display = "block";
+  showSimSettingsUI();
 
   KESSLER_ABORT = new AbortController();
 
@@ -406,7 +407,7 @@ async function returnToNormalMode() {
 
   // Hide simulation info box
   infoBox.style.display = "none";
-
+  hideSimSettingsUI();
   applyFilters();
 }
 
@@ -516,6 +517,42 @@ infoBox.innerHTML = `
 `;
 infoBox.style.display = "none";
 viewer.container.appendChild(infoBox);
+
+// Simulation Settings Box (KESSLER mode only)
+const simSettingsBox = document.createElement("div");
+simSettingsBox.className = "ksd-sim-settings";
+simSettingsBox.innerHTML = `
+  <h4>Simulation Settings</h4>
+
+  <label>
+    Collision Threshold
+    <input id="ksd-set-threshold" type="number" min="0" step="50" value="50" />
+  </label>
+
+  <label>
+    Length (seconds)
+    <input id="ksd-set-length" type="number" min="1" step="3600" value="3600" />
+  </label>
+
+  <label>
+    Step Size (seconds)
+    <input id="ksd-set-step" type="number" min="1" step="50" value="50" />
+  </label>
+
+  <div class="ksd-sim-settings-row">
+    <button id="ksd-set-apply" class="cesium-button">Apply & Restart</button>
+  </div>
+
+  <div id="ksd-set-error" class="ksd-sim-settings-error" style="display:none;"></div>
+`;
+simSettingsBox.style.display = "none";
+viewer.container.appendChild(simSettingsBox);
+
+const simThresholdEl = simSettingsBox.querySelector("#ksd-set-threshold");
+const simLengthEl = simSettingsBox.querySelector("#ksd-set-length");
+const simStepEl = simSettingsBox.querySelector("#ksd-set-step");
+const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
+const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 
 // Always show all objects checkbox
 const lockMaxContainer = document.createElement("div");
@@ -934,7 +971,57 @@ function createAltitudeLegend() {
     legend.appendChild(row);
   });
 }
+function showSimSettingsUI() {
+  simSettingsBox.style.display = "block";
+}
 
+function hideSimSettingsUI() {
+  simSettingsBox.style.display = "none";
+  simErrEl.style.display = "none";
+  simErrEl.textContent = "";
+}
+
+function getSimSettings() {
+  // Read and validate
+  const threshold = Number.parseInt(simThresholdEl.value, 10);
+  const lengthSec = Number.parseInt(simLengthEl.value, 10);
+  const stepSec = Number.parseInt(simStepEl.value, 10);
+
+  if (!Number.isFinite(threshold) || threshold < 0) {
+    return { ok: false, error: "Threshold must be an integer ≥ 0." };
+  }
+  if (!Number.isFinite(lengthSec) || lengthSec < 1) {
+    return { ok: false, error: "Length must be an integer ≥ 1 second." };
+  }
+  if (!Number.isFinite(stepSec) || stepSec < 1) {
+    return { ok: false, error: "Step size must be an integer ≥ 1 second." };
+  }
+  if (stepSec > lengthSec) {
+    return { ok: false, error: "Step size cannot be larger than length." };
+  }
+
+  return {
+    ok: true,
+    threshold,
+    lengthSec,
+    stepSec
+  };
+}
+
+function buildKesslerStreamUrl() {
+  const base = "http://localhost:3000/api/v1/simulation/stream";
+  const s = getSimSettings();
+
+  // If invalid, still return base (caller can handle)
+  if (!s.ok) return { ok: false, error: s.error, url: base };
+
+  const params = new URLSearchParams();
+  params.set("threshold", String(s.threshold));
+  params.set("length", String(s.lengthSec));
+  params.set("step", String(s.stepSec));
+
+  return { ok: true, url: `${base}?${params.toString()}` };
+}
 // ============================================================================
 // 12) BOOT / STARTUP (ONE PLACE)
 // ============================================================================
@@ -950,4 +1037,26 @@ window.addEventListener("load", async () => {
 
   // Initial filter pass
   applyFilters();
+});
+
+simApplyBtn.addEventListener("click", async () => {
+  const s = getSimSettings();
+  if (!s.ok) {
+    simErrEl.textContent = s.error;
+    simErrEl.style.display = "block";
+    return;
+  }
+
+  simErrEl.style.display = "none";
+  simErrEl.textContent = "";
+
+  // Restart stream with new params
+  if (MODE === "KESSLER") {
+    try {
+      if (KESSLER_ABORT) KESSLER_ABORT.abort();
+      await startKesslerStreamFromAPI();
+    } catch (e) {
+      console.error("Failed to restart simulation:", e);
+    }
+  }
 });

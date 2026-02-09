@@ -233,4 +233,47 @@ html, body, #cesiumContainer {
   color: #fff;
 }
 
+.ksd-sim-settings{
+  position: absolute;
+  top: 230px;     
+  right: 12px;    
+  left: auto;
 
+  z-index: 11;     
+  background: rgba(0,0,0,0.75);
+  color: white;
+  padding: 10px 12px;
+  border-radius: 8px;
+  width: 230px;
+  font-size: 13px;
+}
+
+.ksd-sim-settings h4{
+  margin: 0 0 8px 0;
+}
+
+.ksd-sim-settings label{
+  display:block;
+  margin-bottom: 8px;
+}
+
+.ksd-sim-settings input{
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1);
+  color: white;
+}
+
+.ksd-sim-settings-row{
+  display:flex;
+  justify-content:flex-end;
+  margin-top: 6px;
+}
+
+.ksd-sim-settings-error{
+  margin-top: 8px;
+  color: #ffb3b3;
+}
