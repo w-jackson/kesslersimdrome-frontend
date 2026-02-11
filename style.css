@@ -233,7 +233,7 @@ html, body, #cesiumContainer {
   color: #fff;
 }
 
-.ksd-sim-settings{
+.ksd-sim-settings {
   position: absolute;
   top: 230px;     
   right: 12px;    
@@ -248,16 +248,20 @@ html, body, #cesiumContainer {
   font-size: 13px;
 }
 
-.ksd-sim-settings h4{
+.ksd-sim-settings h4,
+.ksd-add-object h4{
   margin: 0 0 8px 0;
 }
 
-.ksd-sim-settings label{
+.ksd-sim-settings label,
+.ksd-add-object label{
   display:block;
   margin-bottom: 8px;
+  margin-right: 8px;
 }
 
-.ksd-sim-settings input{
+.ksd-sim-settings input,
+.ksd-add-object input{
   width: 100%;
   margin-top: 4px;
   padding: 6px;

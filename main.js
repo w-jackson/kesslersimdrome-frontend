@@ -554,6 +554,56 @@ const simStepEl = simSettingsBox.querySelector("#ksd-set-step");
 const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
 const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 
+// Add Object Box (KESSLER mode only)
+const addObjectBox = document.createElement("div");
+addObjectBox.className = "ksd-add-object";
+addObjectBox.innerHTML = `
+  <h4>Add Object</h4>
+  <label>
+    Longitude (deg)
+    <input type="number" step="0.0001" min="180" max="180"/>
+  </label>
+  <label>
+    Latitude (deg)
+    <input type="number" step="0.0001" min="-90" max="90"/>
+  </label>
+  <label>
+    Altitude (km)
+    <input type="number" step="1" />
+  </label>
+  <label>
+    Velocity X (km/s)
+    <input type="number" step="0.001" />
+  </label>
+  <label>
+    Velocity Y (km/s)
+    <input type="number" step="0.001" />
+  </label>
+  <label>
+    Velocity Z (km/s)
+    <input type="number" step="0.001" />
+  </label>
+  <div class="ksd-sim-settings-row">
+    <button class="cesium-button">Add Object</button>
+  </div>
+`;
+addObjectBox.style.display = "none";       // hidden initially
+addObjectBox.style.position = "absolute";
+addObjectBox.style.bottom = "10px";         // bottom right
+addObjectBox.style.left = "10px";
+addObjectBox.style.background = "rgba(30,30,30,0.9)";
+addObjectBox.style.color = "white";
+addObjectBox.style.padding = "12px";
+addObjectBox.style.borderRadius = "6px";
+addObjectBox.style.zIndex = "10";           // above Cesium canvas
+addObjectBox.style.width = "220px";
+addObjectBox.style.fontSize = "13px";
+addObjectBox.style.fontFamily = "sans-serif";
+addObjectBox.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)";
+addObjectBox.style.display = "none";        // hide until Kessler mode
+
+viewer.container.appendChild(addObjectBox);
+
 // Always show all objects checkbox
 const lockMaxContainer = document.createElement("div");
 lockMaxContainer.className = "ksd-lock-max";
@@ -971,14 +1021,16 @@ function createAltitudeLegend() {
     legend.appendChild(row);
   });
 }
+
+// Show/hide box with simulation settings
 function showSimSettingsUI() {
   simSettingsBox.style.display = "block";
+  addObjectBox.style.display = "block";
 }
 
 function hideSimSettingsUI() {
   simSettingsBox.style.display = "none";
-  simErrEl.style.display = "none";
-  simErrEl.textContent = "";
+  addObjectBox.style.display = "none";
 }
 
 function getSimSettings() {
