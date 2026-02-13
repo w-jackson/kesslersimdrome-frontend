@@ -93,6 +93,24 @@ html, body, #cesiumContainer {
   pointer-events: auto;
 }
 
+/* Add Object panel: left side, below altitude legend */
+.ksd-add-object{
+  position: fixed;
+  left: 15px;
+  top: calc(15px + var(--legend-height, 160px) + 12px);
+
+  z-index: 1000;
+  background: rgba(0,0,0,0.75);
+  color: white;
+  padding: 14px;
+  border-radius: 10px;
+
+  width: 280px;              /* fixed clean width */
+  max-height: 45vh;          /* limit vertical growth */
+  overflow-y: auto;
+
+  box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+}
 
 .legend-item {
   display: flex;
@@ -280,4 +298,42 @@ html, body, #cesiumContainer {
 .ksd-sim-settings-error{
   margin-top: 8px;
   color: #ffb3b3;
+}
+
+/* Generic collapsible panel header */
+.ksd-panel-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+
+.ksd-panel-header h4{
+  margin:0;
+  font-size: 14px;
+}
+
+.ksd-panel-toggle{
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ksd-panel-body{
+  display:block;
+}
+
+.ksd-panel-collapsed .ksd-panel-body{
+  display:none;
+}
+
+/* when collapsed, make it look compact */
+.ksd-panel-collapsed{
+  padding-bottom: 10px;
 }

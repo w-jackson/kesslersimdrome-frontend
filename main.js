@@ -522,28 +522,33 @@ viewer.container.appendChild(infoBox);
 const simSettingsBox = document.createElement("div");
 simSettingsBox.className = "ksd-sim-settings";
 simSettingsBox.innerHTML = `
-  <h4>Simulation Settings</h4>
-
-  <label>
-    Collision Threshold
-    <input id="ksd-set-threshold" type="number" min="0" step="50" value="50" />
-  </label>
-
-  <label>
-    Length (seconds)
-    <input id="ksd-set-length" type="number" min="1" step="3600" value="3600" />
-  </label>
-
-  <label>
-    Step Size (seconds)
-    <input id="ksd-set-step" type="number" min="1" step="50" value="50" />
-  </label>
-
-  <div class="ksd-sim-settings-row">
-    <button id="ksd-set-apply" class="cesium-button">Apply & Restart</button>
+  <div class="ksd-panel-header">
+    <h4>Simulation Settings</h4>
+    <button class="ksd-panel-toggle" type="button" aria-label="Minimize">–</button>
   </div>
 
-  <div id="ksd-set-error" class="ksd-sim-settings-error" style="display:none;"></div>
+  <div class="ksd-panel-body">
+    <label>
+      Collision Threshold
+      <input id="ksd-set-threshold" type="number" min="0" step="50" value="50" />
+    </label>
+
+    <label>
+      Length (seconds)
+      <input id="ksd-set-length" type="number" min="1" step="3600" value="3600" />
+    </label>
+
+    <label>
+      Step Size (seconds)
+      <input id="ksd-set-step" type="number" min="1" step="50" value="50" />
+    </label>
+
+    <div class="ksd-sim-settings-row">
+      <button id="ksd-set-apply" class="cesium-button" type="button">Apply & Restart</button>
+    </div>
+
+    <div id="ksd-set-error" class="ksd-sim-settings-error" style="display:none;"></div>
+  </div>
 `;
 simSettingsBox.style.display = "none";
 viewer.container.appendChild(simSettingsBox);
@@ -558,49 +563,50 @@ const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 const addObjectBox = document.createElement("div");
 addObjectBox.className = "ksd-add-object";
 addObjectBox.innerHTML = `
-  <h4>Add Object</h4>
-  <label>
-    Longitude (deg)
-    <input type="number" step="0.0001" min="180" max="180"/>
-  </label>
-  <label>
-    Latitude (deg)
-    <input type="number" step="0.0001" min="-90" max="90"/>
-  </label>
-  <label>
-    Altitude (km)
-    <input type="number" step="1" />
-  </label>
-  <label>
-    Velocity X (km/s)
-    <input type="number" step="0.001" />
-  </label>
-  <label>
-    Velocity Y (km/s)
-    <input type="number" step="0.001" />
-  </label>
-  <label>
-    Velocity Z (km/s)
-    <input type="number" step="0.001" />
-  </label>
-  <div class="ksd-sim-settings-row">
-    <button class="cesium-button">Add Object</button>
+  <div class="ksd-panel-header">
+    <h4>Add Object</h4>
+    <button class="ksd-panel-toggle" type="button" aria-label="Minimize">–</button>
+  </div>
+
+  <div class="ksd-panel-body">
+    <label>
+      Longitude (deg)
+      <input id="ksd-add-lon" type="number" step="0.0001" min="-180" max="180"/>
+    </label>
+
+    <label>
+      Latitude (deg)
+      <input id="ksd-add-lat" type="number" step="0.0001" min="-90" max="90"/>
+    </label>
+
+    <label>
+      Altitude (km)
+      <input id="ksd-add-alt" type="number" step="1" />
+    </label>
+
+    <label>
+      Velocity X (km/s)
+      <input id="ksd-add-vx" type="number" step="0.001" />
+    </label>
+
+    <label>
+      Velocity Y (km/s)
+      <input id="ksd-add-vy" type="number" step="0.001" />
+    </label>
+
+    <label>
+      Velocity Z (km/s)
+      <input id="ksd-add-vz" type="number" step="0.001" />
+    </label>
+
+    <div class="ksd-sim-settings-row">
+      <button id="ksd-add-object-btn" class="cesium-button" type="button">Add Object</button>
+    </div>
+
+    <div id="ksd-add-object-error" class="ksd-sim-settings-error" style="display:none;"></div>
   </div>
 `;
 addObjectBox.style.display = "none";       // hidden initially
-addObjectBox.style.position = "absolute";
-addObjectBox.style.bottom = "10px";         // bottom right
-addObjectBox.style.left = "10px";
-addObjectBox.style.background = "rgba(30,30,30,0.9)";
-addObjectBox.style.color = "white";
-addObjectBox.style.padding = "12px";
-addObjectBox.style.borderRadius = "6px";
-addObjectBox.style.zIndex = "10";           // above Cesium canvas
-addObjectBox.style.width = "220px";
-addObjectBox.style.fontSize = "13px";
-addObjectBox.style.fontFamily = "sans-serif";
-addObjectBox.style.boxShadow = "0 2px 8px rgba(0,0,0,0.5)";
-addObjectBox.style.display = "none";        // hide until Kessler mode
 
 viewer.container.appendChild(addObjectBox);
 
@@ -728,6 +734,26 @@ searchButton.addEventListener("click", runNormalSearch);
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") runNormalSearch();
 });
+
+function makePanelCollapsible(panelEl, storageKey) {
+  const btn = panelEl.querySelector(".ksd-panel-toggle");
+  if (!btn) return;
+
+  // restore previous collapsed state
+  const saved = localStorage.getItem(storageKey);
+  if (saved === "collapsed") {
+    panelEl.classList.add("ksd-panel-collapsed");
+    btn.textContent = "+";
+    btn.setAttribute("aria-label", "Expand");
+  }
+
+  btn.addEventListener("click", () => {
+    const collapsed = panelEl.classList.toggle("ksd-panel-collapsed");
+    btn.textContent = collapsed ? "+" : "–";
+    btn.setAttribute("aria-label", collapsed ? "Expand" : "Minimize");
+    localStorage.setItem(storageKey, collapsed ? "collapsed" : "open");
+  });
+}
 
 // Enable search initially
 setNormalSearchEnabled(true);
@@ -976,6 +1002,14 @@ function updateSimulationInfo({ totalObjects, totalCollisions, stepCollisions })
   }
 }
 
+function syncLegendHeightVar() {
+  const legend = document.getElementById("altitude-legend");
+  if (!legend) return;
+
+  const h = Math.ceil(legend.getBoundingClientRect().height);
+  document.documentElement.style.setProperty("--legend-height", `${h}px`);
+}
+
 function createAltitudeLegend() {
   const legend = document.getElementById("altitude-legend");
   if (!legend) return;
@@ -1085,6 +1119,8 @@ window.addEventListener("load", async () => {
 
   // Build legend + load normal data
   createAltitudeLegend();
+  syncLegendHeightVar();
+  window.addEventListener("resize", syncLegendHeightVar);
   await loadAndRenderTrajectories();
 
   // Initial filter pass
@@ -1112,3 +1148,6 @@ simApplyBtn.addEventListener("click", async () => {
     }
   }
 });
+
+makePanelCollapsible(simSettingsBox, "ksd_sim_settings_panel");
+makePanelCollapsible(addObjectBox, "ksd_add_object_panel");
