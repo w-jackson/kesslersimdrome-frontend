@@ -228,8 +228,8 @@ async function loadAndRenderTrajectories() {
       const altBin = altitudeToBin(traj.samples[0].alt);
       const modelUri = MODEL_BY_ID.get(traj.id) || null;
 
-      normalDS.entities.add({
-        name: traj.name,
+      const entity = normalDS.entities.add({
+        name: traj.object.name,
         position: pos,
         availability: new Cesium.TimeIntervalCollection([
           new Cesium.TimeInterval({ start, stop })
@@ -249,12 +249,52 @@ async function loadAndRenderTrajectories() {
             }
           : undefined,
         properties: new Cesium.PropertyBag({
-          id: traj.id,
-          type: normalizeTypeForDev(traj.type_field),
-          country: normalizeCountryForDev(traj.country),
-          altBin
+            id: traj.id,
+            type: normalizeTypeForDev(traj.type_field),
+            country: normalizeCountryForDev(traj.country),
+            altBin,
+            objectInfo: {
+              name: traj.object?.name ?? traj.name ?? "Unknown",
+              id: traj.object?.id ?? traj.id,
+              country_of_origin: traj.object?.country_of_origin ?? traj.country ?? "Unknown",
+              object_type: traj.object?.object_type ?? "Unknown",
+              asset_id: traj.object?.asset_id ?? "N/A",
+              launch_date: traj.object?.launch_date ?? "N/A",
+              launch_site: traj.object?.launch_site ?? "N/A",
+              decay_date: traj.object?.decay_date ?? "N/A",
+              period: traj.object?.period ?? "N/A",
+              inclination: traj.object?.inclination ?? "N/A",
+              obs_status_code: traj.object?.obs_status_code ?? "N/A",
+              apogee: traj.object?.apogee ?? "N/A",
+              perigee: traj.object?.perigee ?? "N/A",
+              rcs: traj.object?.rcs ?? "N/A"
+          }
         })
       });
+
+      entity.description = new Cesium.CallbackProperty(function(time, result) {
+        const obj = entity.properties.getValue(time)?.objectInfo;
+        if (!obj) return "No object info available";
+
+        return `
+          <table>
+            <tr><th>Name</th><td>${obj.name ?? "Unknown"}</td></tr>
+            <tr><th>ID</th><td>${obj.id}</td></tr>
+            <tr><th>Country</th><td>${obj.country_of_origin ?? "Unknown"}</td></tr>
+            <tr><th>Type</th><td>${obj.object_type ?? "Unknown"}</td></tr>
+            <tr><th>Asset ID</th><td>${obj.asset_id ?? "N/A"}</td></tr>
+            <tr><th>Launch Date</th><td>${obj.launch_date ?? "N/A"}</td></tr>
+            <tr><th>Launch Site</th><td>${obj.launch_site ?? "N/A"}</td></tr>
+            <tr><th>Decay Date</th><td>${obj.decay_date ?? "N/A"}</td></tr>
+            <tr><th>Period</th><td>${obj.period ?? "N/A"}</td></tr>
+            <tr><th>Inclination</th><td>${obj.inclination ?? "N/A"}</td></tr>
+            <tr><th>Obs Status</th><td>${obj.obs_status_code ?? "N/A"}</td></tr>
+            <tr><th>Apogee</th><td>${obj.apogee ?? "N/A"}</td></tr>
+            <tr><th>Perigee</th><td>${obj.perigee ?? "N/A"}</td></tr>
+            <tr><th>RCS</th><td>${obj.rcs ?? "N/A"}</td></tr>
+          </table>
+        `;
+      }, false);
     });
 
     console.log("Trajectory JSON rendered as altitude-colored dots.");
