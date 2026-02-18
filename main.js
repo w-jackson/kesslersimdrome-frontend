@@ -650,6 +650,42 @@ addObjectBox.style.display = "none";       // hidden initially
 
 viewer.container.appendChild(addObjectBox);
 
+// Get the button element
+const addButton = addObjectBox.querySelector("#ksd-add-object-btn");
+
+// Add click event listener
+addButton.addEventListener("click", () => {
+  // Get values from inputs
+  const lon = parseFloat(document.getElementById("ksd-add-lon").value);
+  const lat = parseFloat(document.getElementById("ksd-add-lat").value);
+  const alt = parseFloat(document.getElementById("ksd-add-alt").value);
+
+  const vx = parseFloat(document.getElementById("ksd-add-vx").value);
+  const vy = parseFloat(document.getElementById("ksd-add-vy").value);
+  const vz = parseFloat(document.getElementById("ksd-add-vz").value);
+
+  // Simple validation: make sure inputs are numbers
+  if ([lon, lat, alt, vx, vy, vz].some(isNaN)) {
+    const errorDiv = document.getElementById("ksd-add-object-error");
+    errorDiv.textContent = "Please fill in all fields with valid numbers.";
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  // Hide error if all good
+  document.getElementById("ksd-add-object-error").style.display = "none";
+
+  // Create the signal object
+  const objectData = {
+    position: { lat, lon, alt },   // Latitude, Longitude, Altitude
+    velocity: { x: vx, y: vy, z: vz } // Velocity components
+  };
+
+  // TODO: "Emit" the signal.
+  
+});
+
+
 // Always show all objects checkbox
 const lockMaxContainer = document.createElement("div");
 lockMaxContainer.className = "ksd-lock-max";
