@@ -278,20 +278,42 @@ async function loadAndRenderTrajectories() {
 
         return `
           <table>
-            <tr><th>Name</th><td>${obj.name ?? "Unknown"}</td></tr>
-            <tr><th>ID</th><td>${obj.id}</td></tr>
-            <tr><th>Country</th><td>${obj.country_of_origin ?? "Unknown"}</td></tr>
-            <tr><th>Type</th><td>${obj.object_type ?? "Unknown"}</td></tr>
-            <tr><th>Asset ID</th><td>${obj.asset_id ?? "N/A"}</td></tr>
-            <tr><th>Launch Date</th><td>${obj.launch_date ?? "N/A"}</td></tr>
-            <tr><th>Launch Site</th><td>${obj.launch_site ?? "N/A"}</td></tr>
-            <tr><th>Decay Date</th><td>${obj.decay_date ?? "N/A"}</td></tr>
-            <tr><th>Period</th><td>${obj.period ?? "N/A"}</td></tr>
-            <tr><th>Inclination</th><td>${obj.inclination ?? "N/A"}</td></tr>
-            <tr><th>Obs Status</th><td>${obj.obs_status_code ?? "N/A"}</td></tr>
-            <tr><th>Apogee</th><td>${obj.apogee ?? "N/A"}</td></tr>
-            <tr><th>Perigee</th><td>${obj.perigee ?? "N/A"}</td></tr>
-            <tr><th>RCS</th><td>${obj.rcs ?? "N/A"}</td></tr>
+            <tr><th>Name
+            <span class="help" title="Common English name of the object">?</span>
+            </th><td>${obj.name ?? "Unknown"}</td></tr>
+            <tr><th>ID
+            <span class="help" title="Unique identifier for the object.">?</span>
+            </th><td>${obj.id}</td></tr>
+            <tr><th>Country
+            <span class="help" title="Country of origin or operator.">?</span>
+            </th><td>${obj.country_of_origin ?? "Unknown"}</td></tr>
+            <tr><th>Type
+            <span class="help" title="Classification of the object (e.g. satellite, rocket body, debris).">?</span>
+            </th><td>${obj.object_type ?? "Unknown"}</td></tr>
+            <tr><th>Launch Date
+            <span class="help" title="Date when the object was launched.">?</span>
+            </th><td>${obj.launch_date ?? "N/A"}</td></tr>
+            <tr><th>Launch Site
+            <span class="help" title="Location from which the object was launched.">?</span>
+            </th><td>${obj.launch_site ?? "N/A"}</td></tr>
+            <tr><th>Decay Date
+            <span class="help" title="Date when the object is expected to 'fall into' Earth's atmosphere.">?</span>
+            </th><td>${obj.decay_date ?? "N/A"}</td></tr>
+            <tr><th>Period(Minutes)
+            <span class="help" title="How long it takes the object to orbit once around Earth.">?</span>
+            </th><td>${obj.period ?? "N/A"}</td></tr>
+            <tr><th>Inclination(Degrees)
+            <span class="help" title="Tilt of the object's orbit relative to Earth's equator.">?</span>
+            </th><td>${obj.inclination ?? "N/A"}</td></tr>
+            <tr><th>Apogee(km)
+            <span class="help" title="Farthest point from Earth in the object's orbit.">?</span>
+            </th><td>${obj.apogee ?? "N/A"}</td></tr>
+            <tr><th>Perigee(km)
+            <span class="help" title="Closest point to Earth in the object's orbit.">?</span>
+            </th><td>${obj.perigee ?? "N/A"}</td></tr>
+            <tr><th>RCS
+            <span class="help" title="Radar Cross Section, a measure of how detectable the object is by radar.">?</span>
+            </th><td>${obj.rcs ?? "N/A"}</td></tr>
           </table>
         `;
       }, false);
