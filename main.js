@@ -16,7 +16,7 @@
  */
 
 
-const simulation_object_to_add = []
+simulation_object_to_add = []
 
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
@@ -310,7 +310,33 @@ async function loadAndRenderTrajectories() {
 // 5) KESSLER MODE: STREAM + UPSERT
 // ============================================================================
 
+function openKesslerScreen() {
+  ksdButton.classList.add("active");
+  ksdButton.title = "Exit Kessler Simulation";
+  setNormalSearchEnabled(false);
+
+  stopLiveUpdates();
+  if (KESSLER_ABORT) KESSLER_ABORT.abort();
+
+  MODE = "KESSLER";
+  normalDS.show = false;
+  kesslerDS.show = true;
+
+  hideTimeUI();
+  clearKesslerObjectsOnly();
+
+  // Show simulation info box
+  infoBox.style.display = "block";
+  showSimSettingsUI();
+
+  KESSLER_ABORT = new AbortController();
+}
+
+
 async function startKesslerStreamFromAPI() {
+  addObjectBox.querySelector("#ksd-add-object-btn").click();
+  simSettingsBox.querySelector(".ksd-panel-toggle").click();
+
   stopLiveUpdates();
   if (KESSLER_ABORT) KESSLER_ABORT.abort();
 
@@ -339,6 +365,8 @@ async function startKesslerStreamFromAPI() {
   if (simulation_object_to_add.length > 0) {
     params.set("additional_objects", JSON.stringify(simulation_object_to_add));
   }
+
+  simulation_object_to_add = [];
 
   const url = `http://localhost:3000/api/v1/simulation/stream?${params.toString()}`;
 
@@ -602,7 +630,7 @@ simSettingsBox.innerHTML = `
     </label>
 
     <div class="ksd-sim-settings-row">
-      <button id="ksd-set-apply" class="cesium-button" type="button">Apply & Restart</button>
+      <button id="ksd-set-apply" class="cesium-button" type="button">Apply & Start/Restart</button>
     </div>
 
     <div id="ksd-set-error" class="ksd-sim-settings-error" style="display:none;"></div>
@@ -681,6 +709,16 @@ addButton.addEventListener("click", () => {
   const vx = parseFloat(document.getElementById("ksd-add-vx").value);
   const vy = parseFloat(document.getElementById("ksd-add-vy").value);
   const vz = parseFloat(document.getElementById("ksd-add-vz").value);
+
+  // Reset the field values.
+  // Get values from inputs
+  document.getElementById("ksd-add-lon").value = "";
+  document.getElementById("ksd-add-lat").value = "";
+  document.getElementById("ksd-add-alt").value = "";
+
+  document.getElementById("ksd-add-vx").value = "";
+  document.getElementById("ksd-add-vy").value = "";
+  document.getElementById("ksd-add-vz").value = "";
 
   // Simple validation: make sure inputs are numbers
   if ([lon, lat, alt, vx, vy, vz].some(isNaN)) {
@@ -763,10 +801,7 @@ toolbar.addEventListener("click", (e) => {
 ksdButton.addEventListener("click", async () => {
   try {
     if (MODE === "NORMAL") {
-      ksdButton.classList.add("active");
-      ksdButton.title = "Exit Kessler Simulation";
-      setNormalSearchEnabled(false);
-      await startKesslerStreamFromAPI();
+      openKesslerScreen();
     } else {
       simulation_object_to_add.clear()
       await returnToNormalMode();
