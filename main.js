@@ -15,6 +15,9 @@
  *  - keeping behavior the same (no feature logic redesign)
  */
 
+
+const simulation_object_to_add = []
+
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
 // ============================================================================
@@ -324,7 +327,22 @@ async function startKesslerStreamFromAPI() {
 
   KESSLER_ABORT = new AbortController();
 
-  const res = await fetch("http://localhost:3000/api/v1/simulation/stream", {
+  // Set params for api call. 
+  const params = new URLSearchParams();
+  params.set("step_size", simStepEl.value);
+  params.set("simulation_length", simLengthEl.value);
+  params.set("collision_threshold", simThresholdEl.value);
+  params.set("collision_res_strat", "SimpleUniform");
+  params.set("start_time", new Date().toISOString());
+
+  // Send the actual objects array as JSON string
+  if (simulation_object_to_add.length > 0) {
+    params.set("additional_objects", JSON.stringify(simulation_object_to_add));
+  }
+
+  const url = `http://localhost:3000/api/v1/simulation/stream?${params.toString()}`;
+
+  const res = await fetch(url, {
     signal: KESSLER_ABORT.signal,
     headers: { Accept: "application/x-ndjson" }
   });
@@ -575,12 +593,12 @@ simSettingsBox.innerHTML = `
 
     <label>
       Length (seconds)
-      <input id="ksd-set-length" type="number" min="1" step="3600" value="3600" />
+      <input id="ksd-set-length" type="number" min="1" step="3600" value="360" />
     </label>
 
     <label>
       Step Size (seconds)
-      <input id="ksd-set-step" type="number" min="1" step="50" value="50" />
+      <input id="ksd-set-step" type="number" min="1" step="1" value="10" />
     </label>
 
     <div class="ksd-sim-settings-row">
@@ -681,7 +699,7 @@ addButton.addEventListener("click", () => {
     velocity: { x: vx, y: vy, z: vz } // Velocity components
   };
 
-  // TODO: "Emit" the signal.
+  simulation_object_to_add.push(objectData)
   
 });
 
@@ -750,6 +768,7 @@ ksdButton.addEventListener("click", async () => {
       setNormalSearchEnabled(false);
       await startKesslerStreamFromAPI();
     } else {
+      simulation_object_to_add.clear()
       await returnToNormalMode();
       ksdButton.classList.remove("active");
       setNormalSearchEnabled(true);
