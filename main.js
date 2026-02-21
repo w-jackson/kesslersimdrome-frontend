@@ -732,10 +732,10 @@ addButton.addEventListener("click", () => {
   document.getElementById("ksd-add-object-error").style.display = "none";
 
   // Create the signal object
-  const objectData = {
-    position: { lat, lon, alt },   // Latitude, Longitude, Altitude
-    velocity: { x: vx, y: vy, z: vz } // Velocity components
-  };
+  const objectData = [
+      [lat, lon, alt],   // position
+      [vx, vy, vz]       // velocity
+  ];
 
   simulation_object_to_add.push(objectData)
   
@@ -803,7 +803,7 @@ ksdButton.addEventListener("click", async () => {
     if (MODE === "NORMAL") {
       openKesslerScreen();
     } else {
-      simulation_object_to_add.clear()
+      simulation_object_to_add = [];
       await returnToNormalMode();
       ksdButton.classList.remove("active");
       setNormalSearchEnabled(true);
