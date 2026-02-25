@@ -2,8 +2,8 @@ name: Sync frontend from GitLab
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 13 * * 0"   # Sunday 6 AM MT (7 AM during DST)
+  # schedule:
+  #   - cron: "0 13 * * 0"   # Sunday 6 AM MT (7 AM during DST)
 
 permissions:
   contents: write
