@@ -16,9 +16,9 @@ jobs:
       - name: Clone GitLab repo
         run: |
           git clone https://gitlab-ci-token:${{ secrets.GITLAB_TOKEN }}@capstone.cs.utah.edu/kesslersimdrome/kesslersimdrome.git source-repo
-
+      
       - name: Split and push frontend branch
         run: |
           cd source-repo
           git push --force https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} \
-            $(git subtree split --prefix=front_end):frontend
+            $(git subtree split --prefix=front_end):refs/heads/frontend
