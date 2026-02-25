@@ -15,6 +15,9 @@
  *  - keeping behavior the same (no feature logic redesign)
  */
 
+
+simulation_object_to_add = []
+
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
 // ============================================================================
@@ -105,13 +108,14 @@ function altitudeToBin(h) {
 // DEV normalizers (until backend sends canonical values)
 function normalizeTypeForDev(raw) {
   if (!raw) return "Active";
+  console.log(raw);
   const t = String(raw).toUpperCase();
-  if (t.includes("PAYLOAD") || t.includes("ACTIVE")) return "Active";
+  if (t.includes("PAY")) return "Active";
   return "Junk";
 }
 
 function normalizeCountryForDev(raw) {
-  const known = ["United States", "United Kingdom", "France", "Japan", "Italy", "Soviet Union"];
+  const known = ["US", "UK", "FR", "GER", "JPN", "IT", "BRAZ", "CIS", "PRC"];
   if (!raw) return "Other";
   return known.includes(raw) ? raw : "Other";
 }
@@ -250,8 +254,8 @@ async function loadAndRenderTrajectories() {
           : undefined,
         properties: new Cesium.PropertyBag({
             id: traj.id,
-            type: normalizeTypeForDev(traj.type_field),
-            country: normalizeCountryForDev(traj.country),
+            type: normalizeTypeForDev(traj.object?.object_type),
+            country: normalizeCountryForDev(traj.object?.country_of_origin),
             altBin,
             objectInfo: {
               name: traj.object?.name ?? traj.name ?? "Unknown",
@@ -329,7 +333,33 @@ async function loadAndRenderTrajectories() {
 // 5) KESSLER MODE: STREAM + UPSERT
 // ============================================================================
 
+function openKesslerScreen() {
+  ksdButton.classList.add("active");
+  ksdButton.title = "Exit Kessler Simulation";
+  setNormalSearchEnabled(false);
+
+  stopLiveUpdates();
+  if (KESSLER_ABORT) KESSLER_ABORT.abort();
+
+  MODE = "KESSLER";
+  normalDS.show = false;
+  kesslerDS.show = true;
+
+  hideTimeUI();
+  clearKesslerObjectsOnly();
+
+  // Show simulation info box
+  infoBox.style.display = "block";
+  showSimSettingsUI();
+
+  KESSLER_ABORT = new AbortController();
+}
+
+
 async function startKesslerStreamFromAPI() {
+  addObjectBox.querySelector("#ksd-add-object-btn").click();
+  simSettingsBox.querySelector(".ksd-panel-toggle").click();
+
   stopLiveUpdates();
   if (KESSLER_ABORT) KESSLER_ABORT.abort();
 
@@ -346,7 +376,24 @@ async function startKesslerStreamFromAPI() {
 
   KESSLER_ABORT = new AbortController();
 
-  const res = await fetch("http://localhost:3000/api/v1/simulation/stream", {
+  // Set params for api call. 
+  const params = new URLSearchParams();
+  params.set("step_size", simStepEl.value);
+  params.set("simulation_length", simLengthEl.value);
+  params.set("collision_threshold", simThresholdEl.value);
+  params.set("collision_res_strat", "SimpleUniform");
+  params.set("start_time", new Date().toISOString());
+
+  // Send the actual objects array as JSON string
+  if (simulation_object_to_add.length > 0) {
+    params.set("additional_objects", JSON.stringify(simulation_object_to_add));
+  }
+
+  simulation_object_to_add = [];
+
+  const url = `http://localhost:3000/api/v1/simulation/stream?${params.toString()}`;
+
+  const res = await fetch(url, {
     signal: KESSLER_ABORT.signal,
     headers: { Accept: "application/x-ndjson" }
   });
@@ -411,8 +458,8 @@ function upsertLiveDotFromBackend(id, posKm, velKmps, meta = {}) {
   const { cart, carto } = kmEciToCartographicMeters(posKm);
   const height = Number.isFinite(carto?.height) ? carto.height : 0;
 
-  const type = normalizeTypeForDev(meta.type ?? "Junk");
-  const country = normalizeCountryForDev(meta.country ?? "Other");
+  const type = normalizeTypeForDev(meta.object_type ?? "Junk");
+  const country = normalizeCountryForDev(meta.country_of_origin ?? "Other");
 
   let e = LIVE_ENTITY_BY_ID.get(String(id));
   if (!e) {
@@ -597,16 +644,16 @@ simSettingsBox.innerHTML = `
 
     <label>
       Length (seconds)
-      <input id="ksd-set-length" type="number" min="1" step="3600" value="3600" />
+      <input id="ksd-set-length" type="number" min="1" step="3600" value="360" />
     </label>
 
     <label>
       Step Size (seconds)
-      <input id="ksd-set-step" type="number" min="1" step="50" value="50" />
+      <input id="ksd-set-step" type="number" min="1" step="1" value="10" />
     </label>
 
     <div class="ksd-sim-settings-row">
-      <button id="ksd-set-apply" class="cesium-button" type="button">Apply & Restart</button>
+      <button id="ksd-set-apply" class="cesium-button" type="button">Apply & Start/Restart</button>
     </div>
 
     <div id="ksd-set-error" class="ksd-sim-settings-error" style="display:none;"></div>
@@ -672,6 +719,52 @@ addObjectBox.style.display = "none";       // hidden initially
 
 viewer.container.appendChild(addObjectBox);
 
+// Get the button element
+const addButton = addObjectBox.querySelector("#ksd-add-object-btn");
+
+// Add click event listener
+addButton.addEventListener("click", () => {
+  // Get values from inputs
+  const lon = parseFloat(document.getElementById("ksd-add-lon").value);
+  const lat = parseFloat(document.getElementById("ksd-add-lat").value);
+  const alt = parseFloat(document.getElementById("ksd-add-alt").value);
+
+  const vx = parseFloat(document.getElementById("ksd-add-vx").value);
+  const vy = parseFloat(document.getElementById("ksd-add-vy").value);
+  const vz = parseFloat(document.getElementById("ksd-add-vz").value);
+
+  // Reset the field values.
+  // Get values from inputs
+  document.getElementById("ksd-add-lon").value = "";
+  document.getElementById("ksd-add-lat").value = "";
+  document.getElementById("ksd-add-alt").value = "";
+
+  document.getElementById("ksd-add-vx").value = "";
+  document.getElementById("ksd-add-vy").value = "";
+  document.getElementById("ksd-add-vz").value = "";
+
+  // Simple validation: make sure inputs are numbers
+  if ([lon, lat, alt, vx, vy, vz].some(isNaN)) {
+    const errorDiv = document.getElementById("ksd-add-object-error");
+    errorDiv.textContent = "Please fill in all fields with valid numbers.";
+    errorDiv.style.display = "block";
+    return;
+  }
+
+  // Hide error if all good
+  document.getElementById("ksd-add-object-error").style.display = "none";
+
+  // Create the signal object
+  const objectData = [
+      [lat, lon, alt],   // position
+      [vx, vy, vz]       // velocity
+  ];
+
+  simulation_object_to_add.push(objectData)
+  
+});
+
+
 // Always show all objects checkbox
 const lockMaxContainer = document.createElement("div");
 lockMaxContainer.className = "ksd-lock-max";
@@ -731,11 +824,9 @@ toolbar.addEventListener("click", (e) => {
 ksdButton.addEventListener("click", async () => {
   try {
     if (MODE === "NORMAL") {
-      ksdButton.classList.add("active");
-      ksdButton.title = "Exit Kessler Simulation";
-      setNormalSearchEnabled(false);
-      await startKesslerStreamFromAPI();
+      openKesslerScreen();
     } else {
+      simulation_object_to_add = [];
       await returnToNormalMode();
       ksdButton.classList.remove("active");
       setNormalSearchEnabled(true);
@@ -832,15 +923,15 @@ const TYPE_CODE_MAP = {
 };
 
 const COUNTRY_CODE_MAP = {
-  US: "United States",
-  UK: "United Kingdom",
-  FR: "France",
-  GER: "Germany",
-  JPN: "Japan",
-  IT: "Italy",
-  BRAZ: "Brazil",
-  CIS: "Soviet Union",
-  PRC: "China",
+  US: "US",
+  UK: "UK",
+  FR: "FR",
+  GER: "GER",
+  JPN: "JPN",
+  IT: "IT",
+  BRAZ: "BRAZ",
+  CIS: "CIS",
+  PRC: "PRC",
   Other: "Other"
 };
 
