@@ -1,0 +1,44 @@
+name: Sync frontend from GitLab
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 13 * * 0"   # Sunday 6 AM MT (7 AM during DST)
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitHub repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Clone GitLab repo
+        run: |
+          git clone https://gitlab-ci-token:${{ secrets.GITLAB_TOKEN }}@capstone.cs.utah.edu/kesslersimdrome/kesslersimdrome.git source-repo
+
+      - name: Sync front_end folder into repo root
+        run: |
+          rsync -av --delete \
+            --exclude='.github' \
+            --exclude='README.md' \
+            source-repo/front_end/ ./
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          git add .
+
+          if git diff --staged --quiet; then
+            echo "No changes detected"
+          else
+            git commit -m "Sync frontend from GitLab"
+            git push
+          fi
