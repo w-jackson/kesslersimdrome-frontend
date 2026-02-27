@@ -73,7 +73,7 @@ const satelliteModelUrlList = ["hubble.glb", "ISS_stationary.glb"];
 
 // Known model mapping
 const MODEL_BY_ID = new Map([
-  [20580, "assets/hubble.glb"], // Hubble
+  [64562, "assets/hubble.glb"], // Hubble
   [25544, "assets/ISS_stationary.glb"] // ISS
 ]);
 
@@ -230,7 +230,7 @@ async function loadAndRenderTrajectories() {
 
       const pointSize = sizeByType(traj.type_field);
       const altBin = altitudeToBin(traj.samples[0].alt);
-      const modelUri = MODEL_BY_ID.get(traj.id) || null;
+      const modelUri = MODEL_BY_ID.get(traj.object.id) || null;
 
       const entity = normalDS.entities.add({
         name: traj.object.name,
