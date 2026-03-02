@@ -73,7 +73,7 @@ const satelliteModelUrlList = ["hubble.glb", "ISS_stationary.glb"];
 
 // Known model mapping
 const MODEL_BY_ID = new Map([
-  [64562, "assets/hubble.glb"], // Hubble
+  [20580, "assets/hubble.glb"], // Hubble
   [25544, "assets/ISS_stationary.glb"] // ISS
 ]);
 
