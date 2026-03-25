@@ -16,7 +16,7 @@
  */
 
 
-simulation_object_to_add = []
+let simulation_object_to_add = [];
 
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
@@ -333,6 +333,51 @@ async function loadAndRenderTrajectories() {
 // 5) KESSLER MODE: STREAM + UPSERT
 // ============================================================================
 
+
+function ensureLoadingUI() {
+  let overlay = document.getElementById("ksd-loading-overlay");
+  if (overlay) return overlay;
+
+  overlay = document.createElement("div");
+  overlay.id = "ksd-loading-overlay";
+  overlay.style.position = "absolute";
+  overlay.style.inset = "0";
+  overlay.style.display = "none";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.background = "rgba(0,0,0,0.45)";
+  overlay.style.zIndex = "2000";
+  overlay.innerHTML = `
+    <div style="min-width:320px; max-width:420px; background:rgba(20,20,20,0.95); color:white; padding:16px 18px; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.35); font-family:sans-serif;">
+      <div id="ksd-loading-text" style="font-size:14px; font-weight:600; margin-bottom:10px;">Preparing simulation…</div>
+      <div style="height:10px; background:#333; border-radius:999px; overflow:hidden;">
+        <div id="ksd-loading-bar" style="height:100%; width:0%; background:#6cf;"></div>
+      </div>
+    </div>
+  `;
+  viewer.container.appendChild(overlay);
+  return overlay;
+}
+
+function showLoadingUI() {
+  const overlay = ensureLoadingUI();
+  overlay.style.display = "flex";
+}
+
+function updateLoadingUI(pct, text) {
+  const overlay = ensureLoadingUI();
+  const bar = overlay.querySelector("#ksd-loading-bar");
+  const label = overlay.querySelector("#ksd-loading-text");
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(pct) ? pct : 0));
+  bar.style.width = `${Math.round(clamped * 100)}%`;
+  if (text) label.textContent = text;
+}
+
+function hideLoadingUI() {
+  const overlay = document.getElementById("ksd-loading-overlay");
+  if (overlay) overlay.style.display = "none";
+}
+
 function openKesslerScreen() {
   ksdButton.classList.add("active");
   ksdButton.title = "Exit Kessler Simulation";
@@ -363,20 +408,23 @@ async function startKesslerStreamFromAPI() {
   stopLiveUpdates();
   if (KESSLER_ABORT) KESSLER_ABORT.abort();
 
+  let hasRenderedFirstFrame = false;
+
   MODE = "KESSLER";
   normalDS.show = false;
   kesslerDS.show = true;
 
   hideTimeUI();
   clearKesslerObjectsOnly();
-
-  // Show simulation info box
+  kesslerDS.show = false;
   infoBox.style.display = "block";
   showSimSettingsUI();
 
+  showLoadingUI();
+  updateLoadingUI(0, "Connecting to simulation…");
+
   KESSLER_ABORT = new AbortController();
 
-  // Set params for api call. 
   const params = new URLSearchParams();
   params.set("step_size", simStepEl.value);
   params.set("simulation_length", simLengthEl.value);
@@ -384,7 +432,6 @@ async function startKesslerStreamFromAPI() {
   params.set("collision_res_strat", "SimpleUniform");
   params.set("start_time", new Date().toISOString());
 
-  // Send the actual objects array as JSON string
   if (simulation_object_to_add.length > 0) {
     params.set("additional_objects", JSON.stringify(simulation_object_to_add));
   }
@@ -398,60 +445,186 @@ async function startKesslerStreamFromAPI() {
     headers: { Accept: "application/x-ndjson" }
   });
 
-  if (!res.ok || !res.body) throw new Error(`Stream HTTP ${res.status}`);
+  if (!res.ok || !res.body) {
+    updateLoadingUI(0, `Stream HTTP ${res.status}`);
+    throw new Error(`Stream HTTP ${res.status}`);
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
+  let lastMeta = null;
+  let currentStepIndex = null;
+  let expectedChunks = 0;
+  let receivedChunks = 0;
+  let stepBuf = null;
 
-    buffer += decoder.decode(value, { stream: true });
+  const BACKEND_CHUNK_SIZE = 500;
 
-    let idx;
-    while ((idx = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, idx).trim();
-      buffer = buffer.slice(idx + 1);
-      if (!line) continue;
-
-      let msg;
-      try {
-        msg = JSON.parse(line);
-      } catch {
-        console.warn("Bad JSON line:", line);
-        continue;
-      }
-
-      if (msg.status) {
-        console.log("Kessler:", msg.status);
-        continue;
-      }
-
-      if (Array.isArray(msg.objects)) {
-        updateSimulationInfo({
-          totalObjects: msg.object_count,
-          totalCollisions: msg.total_num_collisions,
-          stepCollisions: msg.step_num_collision
-        });
-
-        updateSliderMax(msg.object_count);
-
-        for (let i = 0; i < msg.objects.length; i++) {
-          const pair = msg.objects[i];
-          const pos = pair[0];
-          const vel = pair[1];
-          const id = i; // ideally backend provides ids
-          upsertLiveDotFromBackend(id, pos, vel);
-        }
-
-        applyFilters();
-      }
-    }
+  function beginStep(stepIndex, totalChunks, objectCount) {
+    currentStepIndex = stepIndex;
+    expectedChunks = totalChunks || 0;
+    receivedChunks = 0;
+    stepBuf = new Array(objectCount || 0);
   }
 
-  console.log("Kessler stream ended");
+  function updateOverlay(extra = "") {
+    if (!lastMeta) return;
+    const done = lastMeta.finished_steps_count ?? 0;
+    const total = lastMeta.total_step_count ?? 0;
+    const pct = total > 0 ? done / total : 0;
+    const base = `Simulating: step ${done}/${total}`;
+    updateLoadingUI(pct, extra ? `${base} — ${extra}` : base);
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let idx;
+      while ((idx = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line) continue;
+
+        let msg;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          console.warn("Bad JSON line:", line);
+          continue;
+        }
+
+        if (msg.status && !msg.type) {
+          console.log("Kessler:", msg.status);
+          continue;
+        }
+
+        switch (msg.type) {
+          case "loading_stats": {
+            const loaded = msg.loaded_objects ?? 0;
+            const total = msg.total_objects ?? 0;
+            const pct = total > 0 ? loaded / total : 0;
+            if (!hasRenderedFirstFrame) {
+              showLoadingUI();
+              updateLoadingUI(pct, `Loading objects: ${loaded}/${total}`);
+            }
+            break;
+          }
+
+          case "step_meta": {
+            lastMeta = msg;
+
+            updateSimulationInfo({
+              totalObjects: msg.object_count,
+              totalCollisions: msg.total_collision_count,
+              stepCollisions: msg.step_collision_count
+            });
+
+            updateSliderMax(msg.object_count);
+            beginStep(msg.finished_steps_count, 0, msg.object_count);
+
+            if (!hasRenderedFirstFrame) {
+              showLoadingUI();
+              updateOverlay("waiting for chunks…");
+            }
+            break;
+          }
+
+          case "objects_chunk": {
+            const stepIndex = msg.step_index;
+            const chunkIndex = msg.chunk_index ?? 0;
+            const totalChunks = msg.total_chunks ?? 0;
+            const objects = Array.isArray(msg.objects) ? msg.objects : [];
+
+            if (currentStepIndex !== stepIndex || !stepBuf) {
+              const objectCountGuess = totalChunks > 0 ? totalChunks * BACKEND_CHUNK_SIZE : 0;
+              beginStep(stepIndex, totalChunks, objectCountGuess);
+            } else if (expectedChunks === 0 && totalChunks > 0) {
+              expectedChunks = totalChunks;
+            }
+
+            const base = chunkIndex * BACKEND_CHUNK_SIZE;
+            for (let k = 0; k < objects.length; k++) {
+              const pair = objects[k];
+              const pos = pair?.[0];
+              const vel = pair?.[1];
+              if (!pos || !vel) continue;
+
+              const objIndex = base + k;
+              if (objIndex >= stepBuf.length) stepBuf.length = objIndex + 1;
+              stepBuf[objIndex] = [pos, vel];
+            }
+
+            receivedChunks += 1;
+
+            if (!hasRenderedFirstFrame) {
+              if (expectedChunks > 0) updateOverlay(`receiving ${receivedChunks}/${expectedChunks} chunks`);
+              else updateOverlay(`receiving chunk ${receivedChunks}`);
+            }
+
+            if (expectedChunks > 0 && receivedChunks >= expectedChunks) {
+              kesslerDS.entities.suspendEvents();
+              try {
+                for (let objIndex = 0; objIndex < stepBuf.length; objIndex++) {
+                  const pv = stepBuf[objIndex];
+                  if (!pv) continue;
+                  upsertLiveDotFromBackend(String(objIndex), pv[0], pv[1]);
+                }
+              } finally {
+                kesslerDS.entities.resumeEvents();
+              }
+
+              applyFilters();
+
+              if (!hasRenderedFirstFrame) {
+                hasRenderedFirstFrame = true;
+                kesslerDS.show = true;
+                hideLoadingUI();
+              }
+            }
+            break;
+          }
+
+          case "finished": {
+            updateSimulationInfo({
+              totalObjects: msg.final_object_count ?? "—",
+              totalCollisions: msg.total_collision_count ?? "—",
+              stepCollisions: "—"
+            });
+            applyFilters();
+            hideLoadingUI();
+            console.log("Kessler finished:", msg);
+            break;
+          }
+
+          default: {
+            console.log("Unknown stream msg:", msg);
+            break;
+          }
+        }
+      }
+    }
+
+    console.log("Kessler stream ended");
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      console.log("Kessler stream aborted (expected).");
+    } else {
+      console.error("Kessler stream error:", err);
+      updateLoadingUI(0, "Simulation stream error.");
+    }
+    throw err;
+  } finally {
+    if (hasRenderedFirstFrame) {
+      hideLoadingUI();
+      kesslerDS.show = true;
+    }
+  }
 }
 
 function upsertLiveDotFromBackend(id, posKm, velKmps, meta = {}) {
