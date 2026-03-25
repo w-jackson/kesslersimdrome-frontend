@@ -108,7 +108,6 @@ function altitudeToBin(h) {
 // DEV normalizers (until backend sends canonical values)
 function normalizeTypeForDev(raw) {
   if (!raw) return "Active";
-  console.log(raw);
   const t = String(raw).toUpperCase();
   if (t.includes("PAY")) return "Active";
   return "Junk";
@@ -429,7 +428,7 @@ async function startKesslerStreamFromAPI() {
   params.set("step_size", simStepEl.value);
   params.set("simulation_length", simLengthEl.value);
   params.set("collision_threshold", simThresholdEl.value);
-  params.set("collision_res_strat", "SimpleUniform");
+  params.set("collision_res_strat", simBreakOffCount.value);
   params.set("start_time", new Date().toISOString());
 
   if (simulation_object_to_add.length > 0) {
@@ -812,12 +811,17 @@ simSettingsBox.innerHTML = `
   <div class="ksd-panel-body">
     <label>
       Collision Threshold
-      <input id="ksd-set-threshold" type="number" min="0" step="50" value="50" />
+      <input id="ksd-set-threshold" type="number" min="0" step=1" value="25" />
+    </label>
+
+    <label>
+      Break-off Object Count
+      <input id="ksd-break-off-count" type="number" min="4" step="4" value="16" />
     </label>
 
     <label>
       Length (seconds)
-      <input id="ksd-set-length" type="number" min="1" step="3600" value="360" />
+      <input id="ksd-set-length" type="number" min="1" step="10" value="360" />
     </label>
 
     <label>
@@ -838,6 +842,7 @@ viewer.container.appendChild(simSettingsBox);
 const simThresholdEl = simSettingsBox.querySelector("#ksd-set-threshold");
 const simLengthEl = simSettingsBox.querySelector("#ksd-set-length");
 const simStepEl = simSettingsBox.querySelector("#ksd-set-step");
+const simBreakOffCount = simSettingsBox.querySelector("#ksd-break-off-count");
 const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
 const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 
