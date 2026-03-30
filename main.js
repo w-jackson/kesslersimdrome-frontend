@@ -846,6 +846,77 @@ const simBreakOffCount = simSettingsBox.querySelector("#ksd-break-off-count");
 const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
 const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 
+// Add upload CSV button.
+const uploadBtn = document.createElement("button");
+uploadBtn.textContent = "Upload CSV of Objects";
+uploadBtn.style.position = "absolute";
+uploadBtn.style.bottom = "50px";
+uploadBtn.style.right = "50px";
+uploadBtn.style.zIndex = "1000";
+uploadBtn.className = "cesium-button";
+uploadBtn.style.display = "none"; 
+
+document.body.appendChild(uploadBtn); 
+
+// hidden file input
+const csvInput = document.createElement("input");
+csvInput.type = "file";
+csvInput.accept = ".csv";
+csvInput.style.display = "none";
+
+document.body.appendChild(csvInput);
+
+uploadBtn.addEventListener("click", () => {
+  csvInput.click();
+});
+
+csvInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const csvText = e.target.result;
+    try {
+      parseUploadCSV(csvText);
+      alert("CSV was parsed successfully!");
+    } catch(err) {
+      alert("Failed to parse CSV: " + err.message);
+    }
+  };
+
+  reader.readAsText(file);
+});
+
+function parseUploadCSV(text) {
+  const rows = text.trim().split(/\r?\n/);
+
+  if (rows.length < 2) {
+    throw new Error("CSV must contain a header and at least one row.");
+  }
+
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i].split(",");
+
+    if (cols.length < 6) {
+      throw new Error(`Row ${i + 1} does not contain 6 columns.`);
+    }
+
+    const [lon, lat, alt, vx, vy, vz] = cols.map(Number);
+
+    if ([lon, lat, alt, vx, vy, vz].some(v => Number.isNaN(v))) {
+      throw new Error(`Row ${i + 1} contains invalid numeric values.`);
+    }
+
+    simulation_object_to_add.push([
+      [lat, lon, alt],
+      [vx, vy, vz]
+    ]);
+  }
+}
+
+
 // Add Object Box (KESSLER mode only)
 const addObjectBox = document.createElement("div");
 addObjectBox.className = "ksd-add-object";
@@ -1391,11 +1462,13 @@ function createAltitudeLegend() {
 function showSimSettingsUI() {
   simSettingsBox.style.display = "block";
   addObjectBox.style.display = "block";
+  uploadBtn.style.display = "block"
 }
 
 function hideSimSettingsUI() {
   simSettingsBox.style.display = "none";
   addObjectBox.style.display = "none";
+  uploadBtn.style.display = "none"
 }
 
 function getSimSettings() {
