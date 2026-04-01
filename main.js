@@ -18,6 +18,18 @@
 
 let simulation_object_to_add = [];
 
+const simulationState = {
+  loading: {
+    loadedObjects: 0,
+    totalObjects: 0
+  },
+
+  meta: null,
+
+  steps: {},   // stepIndex -> objects
+  finished: null
+};
+
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
 // ============================================================================
@@ -401,6 +413,7 @@ function openKesslerScreen() {
 
 
 async function startKesslerStreamFromAPI() {
+  saveBtn.disabled = true;
   addObjectBox.querySelector("#ksd-add-object-btn").click();
   simSettingsBox.querySelector(".ksd-panel-toggle").click();
 
@@ -508,6 +521,8 @@ async function startKesslerStreamFromAPI() {
             const loaded = msg.loaded_objects ?? 0;
             const total = msg.total_objects ?? 0;
             const pct = total > 0 ? loaded / total : 0;
+            simulationState.loading.loadedObjects = loaded;
+            simulationState.loading.totalObjects = total;
             if (!hasRenderedFirstFrame) {
               showLoadingUI();
               updateLoadingUI(pct, `Loading objects: ${loaded}/${total}`);
@@ -517,7 +532,7 @@ async function startKesslerStreamFromAPI() {
 
           case "step_meta": {
             lastMeta = msg;
-
+            simulationState.meta = msg;
             updateSimulationInfo({
               totalObjects: msg.object_count,
               totalCollisions: msg.total_collision_count,
@@ -586,6 +601,11 @@ async function startKesslerStreamFromAPI() {
                 hideLoadingUI();
               }
             }
+            if (!simulationState.steps[stepIndex]) {
+              simulationState.steps[stepIndex] = [];
+            }
+
+            simulationState.steps[stepIndex].push(...objects);
             break;
           }
 
@@ -597,7 +617,9 @@ async function startKesslerStreamFromAPI() {
             });
             applyFilters();
             hideLoadingUI();
+            saveBtn.disabled = false;
             console.log("Kessler finished:", msg);
+            simulationState.finished = msg;
             break;
           }
 
@@ -845,6 +867,39 @@ const simStepEl = simSettingsBox.querySelector("#ksd-set-step");
 const simBreakOffCount = simSettingsBox.querySelector("#ksd-break-off-count");
 const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
 const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
+
+// Save state button
+const saveBtn = document.createElement("button");
+saveBtn.textContent = "Save Simulation State";
+saveBtn.style.position = "absolute";
+saveBtn.style.bottom = "100px"; 
+saveBtn.style.right = "50px";
+saveBtn.style.zIndex = "1000";
+saveBtn.className = "cesium-button";
+saveBtn.style.display = "none";
+saveBtn.disabled = true;
+
+document.body.appendChild(saveBtn);
+
+saveBtn.addEventListener("click", () => {
+
+  const textContent = JSON.stringify(simulationState, null, 2);
+
+  const blob = new Blob([textContent], { type: "text/plain;charset=utf-8;" });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "simulation_state.txt";
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+  saveBtn.disabled = true;
+});
 
 // Add upload CSV button.
 const uploadBtn = document.createElement("button");
@@ -1462,13 +1517,15 @@ function createAltitudeLegend() {
 function showSimSettingsUI() {
   simSettingsBox.style.display = "block";
   addObjectBox.style.display = "block";
-  uploadBtn.style.display = "block"
+  uploadBtn.style.display = "block";
+  saveBtn.style.display = "block";
 }
 
 function hideSimSettingsUI() {
   simSettingsBox.style.display = "none";
   addObjectBox.style.display = "none";
   uploadBtn.style.display = "none"
+  saveBtn.style.display = "none"
 }
 
 function getSimSettings() {
