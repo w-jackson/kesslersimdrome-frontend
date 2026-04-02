@@ -8,26 +8,25 @@
  *
  * Author: Phuc "Roy" Hoang (Frontend) & Rishab Dixit, Team KesslerSimdrome
  *
- * This version is a cleanup pass focused on:
- *  - clearer sectioning
- *  - moving related functions together
- *  - removing duplicates / keeping one "source of truth" per concept
- *  - keeping behavior the same (no feature logic redesign)
+ * This version adds:
+ *  - normal-mode congestion analysis
+ *  - object risk scoring
+ *  - risk filtering
+ *  - congestion color toggle
  */
 
-
 let simulation_object_to_add = [];
+let useCongestionColors = false;
 
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
 // ============================================================================
 
-// Ion key first
 Cesium.Ion.defaultAccessToken =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI0ZjEyYjkwZC01NGFjLTQ5MzctYjc2NC1lZjI3ZGRhY2I1ODQiLCJpZCI6MzUwMTQwLCJpYXQiOjE3NjAzODMzNTN9.9hsNVl87F-JcB2pljRrS4dywTaCb_ZqWmZWP_t97svU";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI0ZjEyYjkwZC01NGFjLTQ5MzctYjc2NC1lZjI3ZGRhY2I1ODQiLCJpZCI6MzUwMTQwLCJpYXQiOjE3NjAzODMzNTN9.9hsNVl87F-JcB2pljRrS4dywTaCb_ZqWmZWP_t97svU";
 
 const viewer = new Cesium.Viewer("cesiumContainer", {
-  geocoder: false, // disable built-in search button
+  geocoder: false,
   creditContainer: document.createElement("div"),
   imageryProvider: new Cesium.IonImageryProvider({ assetId: 3 }),
   shouldAnimate: true,
@@ -36,7 +35,6 @@ const viewer = new Cesium.Viewer("cesiumContainer", {
   baseLayerPicker: true
 });
 
-// Clean up layer pickers
 const blockedImageLayers = ["Earth at night", "Blue Marble", "Sentinel-2"];
 viewer.baseLayerPicker.viewModel.imageryProviderViewModels =
   viewer.baseLayerPicker.viewModel.imageryProviderViewModels.filter(
@@ -44,16 +42,13 @@ viewer.baseLayerPicker.viewModel.imageryProviderViewModels =
   );
 viewer.baseLayerPicker.viewModel.terrainProviderViewModels = [];
 
-// Lighting
 viewer.scene.globe.enableLighting = true;
 viewer.scene.light = new Cesium.SunLight();
 
-// Camera default
 viewer.camera.setView({
   destination: Cesium.Cartesian3.fromDegrees(0, 0, 15000000)
 });
 
-// Snap multiplier ONLY after user stops dragging the speed slider
 viewer.clock.onTick.addEventListener(() => {
   const anim = viewer.animation;
   if (!anim || !anim.viewModel) return;
@@ -68,13 +63,11 @@ viewer.clock.onTick.addEventListener(() => {
 // 2) MODELS + RENDERING HELPERS
 // ============================================================================
 
-// (Optional list—kept because it exists in your version)
 const satelliteModelUrlList = ["hubble.glb", "ISS_stationary.glb"];
 
-// Known model mapping
 const MODEL_BY_ID = new Map([
-  [20580, "assets/hubble.glb"], // Hubble
-  [25544, "assets/ISS_stationary.glb"] // ISS
+  [20580, "assets/hubble.glb"],
+  [25544, "assets/ISS_stationary.glb"]
 ]);
 
 function sizeByType(type) {
@@ -83,7 +76,6 @@ function sizeByType(type) {
   return 6;
 }
 
-// Altitude (meters) -> Cesium.Color
 function altitudeToColorMeters(h) {
   const km = h / 1000;
   if (km < 200) return Cesium.Color.DEEPSKYBLUE;
@@ -94,7 +86,6 @@ function altitudeToColorMeters(h) {
   return Cesium.Color.MAGENTA;
 }
 
-// Altitude (meters) -> bin key
 function altitudeToBin(h) {
   const km = h / 1000;
   if (km < 200) return "0-200";
@@ -105,7 +96,6 @@ function altitudeToBin(h) {
   return "2000+";
 }
 
-// DEV normalizers (until backend sends canonical values)
 function normalizeTypeForDev(raw) {
   if (!raw) return "Active";
   const t = String(raw).toUpperCase();
@@ -119,10 +109,6 @@ function normalizeCountryForDev(raw) {
   return known.includes(raw) ? raw : "Other";
 }
 
-/**
- * Convert ECI [km] -> Cesium Cartesian + Cartographic (meters).
- * Includes fallback for invalid Cartesian->Cartographic conversion.
- */
 function kmEciToCartographicMeters(posKm) {
   const cart = new Cesium.Cartesian3(posKm[0] * 1000, posKm[1] * 1000, posKm[2] * 1000);
 
@@ -138,6 +124,10 @@ function kmEciToCartographicMeters(posKm) {
   return { cart, carto };
 }
 
+// -----------------------
+// Congestion / Risk logic
+// -----------------------
+
 function cartesianToBucketKey(cartesian) {
   const carto = Cesium.Cartographic.fromCartesian(cartesian);
   if (!carto) return "unknown";
@@ -146,9 +136,9 @@ function cartesianToBucketKey(cartesian) {
   const lonDeg = Cesium.Math.toDegrees(carto.longitude);
   const altKm = carto.height / 1000;
 
-  const latBucket = Math.floor((latDeg + 90) / 10);   // 10-degree buckets
-  const lonBucket = Math.floor((lonDeg + 180) / 10);  // 10-degree buckets
-  const altBucket = Math.floor(altKm / 200);          // 200-km buckets
+  const latBucket = Math.floor((latDeg + 90) / 10);
+  const lonBucket = Math.floor((lonDeg + 180) / 10);
+  const altBucket = Math.floor(altKm / 200);
 
   return `${latBucket}:${lonBucket}:${altBucket}`;
 }
@@ -164,6 +154,53 @@ function congestionColor(score) {
   if (score >= 8) return Cesium.Color.ORANGE;
   return Cesium.Color.LIME;
 }
+
+function setPropertyBagValue(bag, key, value) {
+  try {
+    if (!(key in bag)) {
+      bag.addProperty(key);
+    }
+  } catch (_) {
+    // ignore addProperty errors if property already exists
+  }
+  bag[key] = value;
+}
+
+function computeNormalModeCongestionAndRisk() {
+  const entities = normalDS.entities.values;
+  const bucketCounts = new Map();
+
+  for (const e of entities) {
+    const cart = e.position?.getValue(viewer.clock.currentTime);
+    if (!cart || !e.properties) continue;
+
+    const bucketKey = cartesianToBucketKey(cart);
+    bucketCounts.set(bucketKey, (bucketCounts.get(bucketKey) || 0) + 1);
+  }
+
+  for (const e of entities) {
+    const cart = e.position?.getValue(viewer.clock.currentTime);
+    if (!cart || !e.properties) continue;
+
+    const props = e.properties.getValue(viewer.clock.currentTime);
+    if (!props) continue;
+
+    const bucketKey = cartesianToBucketKey(cart);
+    const congestionScore = bucketCounts.get(bucketKey) || 0;
+
+    let riskScore = congestionScore;
+    if (props.type === "Junk") riskScore += 2;
+    if (props.altBin === "0-200" || props.altBin === "200-400") riskScore += 1;
+
+    const riskLevel = congestionToLevel(riskScore);
+
+    setPropertyBagValue(e.properties, "congestionBucket", bucketKey);
+    setPropertyBagValue(e.properties, "congestionScore", congestionScore);
+    setPropertyBagValue(e.properties, "riskScore", riskScore);
+    setPropertyBagValue(e.properties, "riskLevel", riskLevel);
+  }
+}
+
 // ============================================================================
 // 3) DATA SOURCES + APP MODE STATE
 // ============================================================================
@@ -176,11 +213,10 @@ viewer.dataSources.add(kesslerDS);
 normalDS.show = true;
 kesslerDS.show = false;
 
-let MODE = "NORMAL"; // "NORMAL" | "KESSLER"
+let MODE = "NORMAL";
 let LIVE_TIMER = null;
 let KESSLER_ABORT = null;
 
-// Cache for fast updates in Kessler mode
 const LIVE_ENTITY_BY_ID = new Map();
 
 function stopLiveUpdates() {
@@ -193,10 +229,9 @@ function clearKesslerObjectsOnly() {
   LIVE_ENTITY_BY_ID.clear();
 }
 
-// (Kept from your version; currently unused because upsertLiveDot() isn't defined in this file)
 function applySnapshot(snapshot) {
-  for (const o of snapshot.objects) {
-    // upsertLiveDot(o); // not present in your current file
+  for (const _o of snapshot.objects) {
+    // placeholder
   }
   applyFilters();
 }
@@ -236,7 +271,7 @@ async function loadAndRenderTrajectories() {
       if (!traj.samples || traj.samples.length === 0) return;
 
       const pos = new Cesium.SampledPositionProperty();
-      const STEP = 5; // performance knob
+      const STEP = 5;
 
       for (let i = 0; i < traj.samples.length; i += STEP) {
         const sample = traj.samples[i];
@@ -245,13 +280,6 @@ async function loadAndRenderTrajectories() {
           Cesium.Cartesian3.fromDegrees(sample.lon, sample.lat, sample.alt)
         );
       }
-
-      const pointColor = new Cesium.CallbackProperty((time) => {
-        const cart = pos.getValue(time);
-        if (!cart) return Cesium.Color.GRAY;
-        const carto = Cesium.Cartographic.fromCartesian(cart);
-        return altitudeToColorMeters(carto.height);
-      }, false);
 
       const pointSize = sizeByType(traj.type_field);
       const altBin = altitudeToBin(traj.samples[0].alt);
@@ -265,10 +293,8 @@ async function loadAndRenderTrajectories() {
         ]),
         point: {
           pixelSize: pointSize,
-          color: pointColor,
           outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
           outlineWidth: 1,
-          // dots hidden behind terrain/earth
           disableDepthTestDistance: 0
         },
         model: modelUri
@@ -278,77 +304,71 @@ async function loadAndRenderTrajectories() {
             }
           : undefined,
         properties: new Cesium.PropertyBag({
-            id: traj.id,
-            type: normalizeTypeForDev(traj.object?.object_type),
-            country: normalizeCountryForDev(traj.object?.country_of_origin),
-            altBin,
-            objectInfo: {
-              name: traj.object?.name ?? traj.name ?? "Unknown",
-              id: traj.object?.id ?? traj.id,
-              country_of_origin: traj.object?.country_of_origin ?? traj.country ?? "Unknown",
-              object_type: traj.object?.object_type ?? "Unknown",
-              asset_id: traj.object?.asset_id ?? "N/A",
-              launch_date: traj.object?.launch_date ?? "N/A",
-              launch_site: traj.object?.launch_site ?? "N/A",
-              decay_date: traj.object?.decay_date ?? "N/A",
-              period: traj.object?.period ?? "N/A",
-              inclination: traj.object?.inclination ?? "N/A",
-              obs_status_code: traj.object?.obs_status_code ?? "N/A",
-              apogee: traj.object?.apogee ?? "N/A",
-              perigee: traj.object?.perigee ?? "N/A",
-              rcs: traj.object?.rcs ?? "N/A"
+          id: traj.id,
+          type: normalizeTypeForDev(traj.object?.object_type),
+          country: normalizeCountryForDev(traj.object?.country_of_origin),
+          altBin,
+          objectInfo: {
+            name: traj.object?.name ?? traj.name ?? "Unknown",
+            id: traj.object?.id ?? traj.id,
+            country_of_origin: traj.object?.country_of_origin ?? traj.country ?? "Unknown",
+            object_type: traj.object?.object_type ?? "Unknown",
+            asset_id: traj.object?.asset_id ?? "N/A",
+            launch_date: traj.object?.launch_date ?? "N/A",
+            launch_site: traj.object?.launch_site ?? "N/A",
+            decay_date: traj.object?.decay_date ?? "N/A",
+            period: traj.object?.period ?? "N/A",
+            inclination: traj.object?.inclination ?? "N/A",
+            obs_status_code: traj.object?.obs_status_code ?? "N/A",
+            apogee: traj.object?.apogee ?? "N/A",
+            perigee: traj.object?.perigee ?? "N/A",
+            rcs: traj.object?.rcs ?? "N/A"
           }
         })
       });
 
-      entity.description = new Cesium.CallbackProperty(function(time, result) {
+      entity.point.color = new Cesium.CallbackProperty((time) => {
+        const cart = pos.getValue(time);
+        if (!cart) return Cesium.Color.GRAY;
+
+        const props = entity.properties?.getValue(time);
+        if (useCongestionColors && props?.congestionScore != null) {
+          return congestionColor(props.congestionScore);
+        }
+
+        const carto = Cesium.Cartographic.fromCartesian(cart);
+        return altitudeToColorMeters(carto.height);
+      }, false);
+
+      entity.description = new Cesium.CallbackProperty(function (time) {
         const obj = entity.properties.getValue(time)?.objectInfo;
+        const props = entity.properties.getValue(time);
         if (!obj) return "No object info available";
 
         return `
           <table>
-            <tr><th>Name
-            <span class="help" title="Common English name of the object">?</span>
-            </th><td>${obj.name ?? "Unknown"}</td></tr>
-            <tr><th>ID
-            <span class="help" title="Unique identifier for the object.">?</span>
-            </th><td>${obj.id}</td></tr>
-            <tr><th>Country
-            <span class="help" title="Country of origin or operator.">?</span>
-            </th><td>${obj.country_of_origin ?? "Unknown"}</td></tr>
-            <tr><th>Type
-            <span class="help" title="Classification of the object (e.g. satellite, rocket body, debris).">?</span>
-            </th><td>${obj.object_type ?? "Unknown"}</td></tr>
-            <tr><th>Launch Date
-            <span class="help" title="Date when the object was launched.">?</span>
-            </th><td>${obj.launch_date ?? "N/A"}</td></tr>
-            <tr><th>Launch Site
-            <span class="help" title="Location from which the object was launched.">?</span>
-            </th><td>${obj.launch_site ?? "N/A"}</td></tr>
-            <tr><th>Decay Date
-            <span class="help" title="Date when the object is expected to 'fall into' Earth's atmosphere.">?</span>
-            </th><td>${obj.decay_date ?? "N/A"}</td></tr>
-            <tr><th>Period(Minutes)
-            <span class="help" title="How long it takes the object to orbit once around Earth.">?</span>
-            </th><td>${obj.period ?? "N/A"}</td></tr>
-            <tr><th>Inclination(Degrees)
-            <span class="help" title="Tilt of the object's orbit relative to Earth's equator.">?</span>
-            </th><td>${obj.inclination ?? "N/A"}</td></tr>
-            <tr><th>Apogee(km)
-            <span class="help" title="Farthest point from Earth in the object's orbit.">?</span>
-            </th><td>${obj.apogee ?? "N/A"}</td></tr>
-            <tr><th>Perigee(km)
-            <span class="help" title="Closest point to Earth in the object's orbit.">?</span>
-            </th><td>${obj.perigee ?? "N/A"}</td></tr>
-            <tr><th>RCS
-            <span class="help" title="Radar Cross Section, a measure of how detectable the object is by radar.">?</span>
-            </th><td>${obj.rcs ?? "N/A"}</td></tr>
+            <tr><th>Name</th><td>${obj.name ?? "Unknown"}</td></tr>
+            <tr><th>ID</th><td>${obj.id}</td></tr>
+            <tr><th>Country</th><td>${obj.country_of_origin ?? "Unknown"}</td></tr>
+            <tr><th>Type</th><td>${obj.object_type ?? "Unknown"}</td></tr>
+            <tr><th>Launch Date</th><td>${obj.launch_date ?? "N/A"}</td></tr>
+            <tr><th>Launch Site</th><td>${obj.launch_site ?? "N/A"}</td></tr>
+            <tr><th>Decay Date</th><td>${obj.decay_date ?? "N/A"}</td></tr>
+            <tr><th>Period (Minutes)</th><td>${obj.period ?? "N/A"}</td></tr>
+            <tr><th>Inclination (Degrees)</th><td>${obj.inclination ?? "N/A"}</td></tr>
+            <tr><th>Apogee (km)</th><td>${obj.apogee ?? "N/A"}</td></tr>
+            <tr><th>Perigee (km)</th><td>${obj.perigee ?? "N/A"}</td></tr>
+            <tr><th>RCS</th><td>${obj.rcs ?? "N/A"}</td></tr>
+            <tr><th>Risk Level</th><td>${props?.riskLevel ?? "N/A"}</td></tr>
+            <tr><th>Risk Score</th><td>${props?.riskScore ?? "N/A"}</td></tr>
+            <tr><th>Congestion Score</th><td>${props?.congestionScore ?? "N/A"}</td></tr>
           </table>
         `;
       }, false);
     });
 
-    console.log("Trajectory JSON rendered as altitude-colored dots.");
+    computeNormalModeCongestionAndRisk();
+    console.log("Trajectory JSON rendered as altitude/congestion-colored dots.");
   } catch (err) {
     console.error("Error loading trajectory JSON:", err);
   }
@@ -357,7 +377,6 @@ async function loadAndRenderTrajectories() {
 // ============================================================================
 // 5) KESSLER MODE: STREAM + UPSERT
 // ============================================================================
-
 
 function ensureLoadingUI() {
   let overlay = document.getElementById("ksd-loading-overlay");
@@ -418,13 +437,11 @@ function openKesslerScreen() {
   hideTimeUI();
   clearKesslerObjectsOnly();
 
-  // Show simulation info box
   infoBox.style.display = "block";
   showSimSettingsUI();
 
   KESSLER_ABORT = new AbortController();
 }
-
 
 async function startKesslerStreamFromAPI() {
   addObjectBox.querySelector("#ksd-add-object-btn").click();
@@ -603,8 +620,7 @@ async function startKesslerStreamFromAPI() {
               } finally {
                 kesslerDS.entities.resumeEvents();
               }
-              
-              computeNormalModeCongestionAndRisk();
+
               applyFilters();
 
               if (!hasRenderedFirstFrame) {
@@ -687,7 +703,7 @@ function upsertLiveDotFromBackend(id, posKm, velKmps, meta = {}) {
     LIVE_ENTITY_BY_ID.set(String(id), e);
   } else {
     e.position.setValue(cart);
-    e.properties.altBin = altitudeToBin(carto.height);
+    setPropertyBagValue(e.properties, "altBin", altitudeToBin(carto.height));
     e.point.color = altitudeToColorMeters(carto.height);
   }
 }
@@ -712,8 +728,6 @@ async function returnToNormalMode() {
   normalDS.show = true;
 
   showTimeUI();
-
-  // Hide simulation info box
   infoBox.style.display = "none";
   hideSimSettingsUI();
   applyFilters();
@@ -726,7 +740,6 @@ async function returnToNormalMode() {
 const toolbar = viewer.container.querySelector(".cesium-viewer-toolbar");
 const viewerContainer = viewer.container;
 
-// --- Floating Search UI (NORMAL mode only) ---
 const searchContainer = document.createElement("div");
 searchContainer.className = "ksd-search-floating";
 searchContainer.innerHTML = `
@@ -738,7 +751,6 @@ viewerContainer.appendChild(searchContainer);
 const searchInput = document.getElementById("ksd-search");
 const searchButton = searchContainer.querySelector("button");
 
-// --- Allow user to type a custom time speed by double-clicking the Cesium clock ---
 const animationWidget = viewer.animation;
 if (animationWidget && animationWidget.container) {
   animationWidget.container.addEventListener("dblclick", () => {
@@ -766,7 +778,6 @@ if (animationWidget && animationWidget.container) {
   });
 }
 
-// Toolbar buttons
 const filterBtn = document.createElement("button");
 filterBtn.className = "cesium-button cesium-toolbar-button";
 filterBtn.title = "Filter satellites";
@@ -786,16 +797,18 @@ ksdButton.title = "Simulate Kessler Syndrome";
 ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
 toolbar.appendChild(ksdButton);
 
-// Filter panel
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
 panel.innerHTML = `
   <h4>Filters</h4>
+
   <div class="ksd-filter-row"><strong>Type</strong>
     <label><input type="checkbox" class="f-type" value="PAY" checked>Satellite</label>
     <label><input type="checkbox" class="f-type" value="R/B" checked>Rocket-Body/Debris</label>
   </div>
+
   <div class="ksd-divider"></div>
+
   <div class="ksd-filter-row"><strong>Country</strong>
     <label><input type="checkbox" class="f-country" value="US" checked>United States</label>
     <label><input type="checkbox" class="f-country" value="BRAZ" checked>Brazil</label>
@@ -808,13 +821,28 @@ panel.innerHTML = `
     <label><input type="checkbox" class="f-country" value="PRC" checked>China</label>
     <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
   </div>
+
   <div class="ksd-divider"></div>
+
+  <div class="ksd-filter-row"><strong>Risk</strong>
+    <label><input type="checkbox" class="f-risk" value="Low" checked>Low</label>
+    <label><input type="checkbox" class="f-risk" value="Medium" checked>Medium</label>
+    <label><input type="checkbox" class="f-risk" value="High" checked>High</label>
+  </div>
+
+  <div class="ksd-divider"></div>
+
+  <div class="ksd-filter-row">
+    <label><input type="checkbox" id="ksd-congestion-view">Congestion View</label>
+  </div>
+
+  <div class="ksd-divider"></div>
+
   <div class="ksd-counter">Visible: <span id="ksd-visible">0</span> / <span id="ksd-total">0</span></div>
 `;
 viewer.container.appendChild(panel);
 panel.style.display = "none";
 
-// Simulation info box
 const infoBox = document.createElement("div");
 infoBox.className = "ksd-info-box";
 infoBox.innerHTML = `
@@ -826,7 +854,6 @@ infoBox.innerHTML = `
 infoBox.style.display = "none";
 viewer.container.appendChild(infoBox);
 
-// Simulation Settings Box (KESSLER mode only)
 const simSettingsBox = document.createElement("div");
 simSettingsBox.className = "ksd-sim-settings";
 simSettingsBox.innerHTML = `
@@ -838,7 +865,7 @@ simSettingsBox.innerHTML = `
   <div class="ksd-panel-body">
     <label>
       Collision Threshold
-      <input id="ksd-set-threshold" type="number" min="0" step=1" value="25" />
+      <input id="ksd-set-threshold" type="number" min="0" step="1" value="25" />
     </label>
 
     <label>
@@ -873,7 +900,6 @@ const simBreakOffCount = simSettingsBox.querySelector("#ksd-break-off-count");
 const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
 const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 
-// Add Object Box (KESSLER mode only)
 const addObjectBox = document.createElement("div");
 addObjectBox.className = "ksd-add-object";
 addObjectBox.innerHTML = `
@@ -920,16 +946,11 @@ addObjectBox.innerHTML = `
     <div id="ksd-add-object-error" class="ksd-sim-settings-error" style="display:none;"></div>
   </div>
 `;
-addObjectBox.style.display = "none";       // hidden initially
-
+addObjectBox.style.display = "none";
 viewer.container.appendChild(addObjectBox);
 
-// Get the button element
 const addButton = addObjectBox.querySelector("#ksd-add-object-btn");
-
-// Add click event listener
 addButton.addEventListener("click", () => {
-  // Get values from inputs
   const lon = parseFloat(document.getElementById("ksd-add-lon").value);
   const lat = parseFloat(document.getElementById("ksd-add-lat").value);
   const alt = parseFloat(document.getElementById("ksd-add-alt").value);
@@ -938,17 +959,13 @@ addButton.addEventListener("click", () => {
   const vy = parseFloat(document.getElementById("ksd-add-vy").value);
   const vz = parseFloat(document.getElementById("ksd-add-vz").value);
 
-  // Reset the field values.
-  // Get values from inputs
   document.getElementById("ksd-add-lon").value = "";
   document.getElementById("ksd-add-lat").value = "";
   document.getElementById("ksd-add-alt").value = "";
-
   document.getElementById("ksd-add-vx").value = "";
   document.getElementById("ksd-add-vy").value = "";
   document.getElementById("ksd-add-vz").value = "";
 
-  // Simple validation: make sure inputs are numbers
   if ([lon, lat, alt, vx, vy, vz].some(isNaN)) {
     const errorDiv = document.getElementById("ksd-add-object-error");
     errorDiv.textContent = "Please fill in all fields with valid numbers.";
@@ -956,21 +973,16 @@ addButton.addEventListener("click", () => {
     return;
   }
 
-  // Hide error if all good
   document.getElementById("ksd-add-object-error").style.display = "none";
 
-  // Create the signal object
   const objectData = [
-      [lat, lon, alt],   // position
-      [vx, vy, vz]       // velocity
+    [lat, lon, alt],
+    [vx, vy, vz]
   ];
 
-  simulation_object_to_add.push(objectData)
-  
+  simulation_object_to_add.push(objectData);
 });
 
-
-// Always show all objects checkbox
 const lockMaxContainer = document.createElement("div");
 lockMaxContainer.className = "ksd-lock-max";
 lockMaxContainer.style.marginTop = "6px";
@@ -982,7 +994,6 @@ lockMaxContainer.innerHTML = `
 `;
 panel.appendChild(lockMaxContainer);
 
-// Slider container
 const sliderContainer = document.createElement("div");
 sliderContainer.className = "ksd-slider-container";
 sliderContainer.style.marginTop = "10px";
@@ -995,12 +1006,13 @@ panel.appendChild(sliderContainer);
 const slider = document.getElementById("ksd-limit-slider");
 const sliderValueEl = document.getElementById("ksd-slider-value");
 const lockCheckbox = document.getElementById("ksd-lock-max");
+const congestionViewCheckbox = document.getElementById("ksd-congestion-view");
 
 let maxVisibleObjects = Number(slider.value);
 let lockSliderToMax = false;
 
 // ============================================================================
-// 7) UI WIRING: PANEL, SLIDER, MODE TOGGLE, SEARCH
+// 7) UI WIRING
 // ============================================================================
 
 function isPanelOpen() {
@@ -1025,7 +1037,6 @@ toolbar.addEventListener("click", (e) => {
   if (isPanelOpen()) closePanel();
 });
 
-// Kessler toggle
 ksdButton.addEventListener("click", async () => {
   try {
     if (MODE === "NORMAL") {
@@ -1042,14 +1053,12 @@ ksdButton.addEventListener("click", async () => {
   }
 });
 
-// Slider input
 slider.addEventListener("input", () => {
   maxVisibleObjects = Number(slider.value);
   sliderValueEl.textContent = String(maxVisibleObjects);
   applyFilters();
 });
 
-// Slider double-click for typing
 slider.addEventListener("dblclick", () => {
   const current = Number(slider.value);
   const max = Number(slider.max);
@@ -1073,7 +1082,6 @@ slider.addEventListener("dblclick", () => {
   applyFilters();
 });
 
-// Lock slider to max
 lockCheckbox.addEventListener("change", () => {
   lockSliderToMax = lockCheckbox.checked;
   slider.disabled = lockSliderToMax;
@@ -1087,7 +1095,13 @@ lockCheckbox.addEventListener("change", () => {
   applyFilters();
 });
 
-// Search wiring
+congestionViewCheckbox.addEventListener("change", (e) => {
+  useCongestionColors = e.target.checked;
+  if (viewer.scene && typeof viewer.scene.requestRender === "function") {
+    viewer.scene.requestRender();
+  }
+});
+
 searchButton.addEventListener("click", runNormalSearch);
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") runNormalSearch();
@@ -1097,7 +1111,6 @@ function makePanelCollapsible(panelEl, storageKey) {
   const btn = panelEl.querySelector(".ksd-panel-toggle");
   if (!btn) return;
 
-  // restore previous collapsed state
   const saved = localStorage.getItem(storageKey);
   if (saved === "collapsed") {
     panelEl.classList.add("ksd-panel-collapsed");
@@ -1113,7 +1126,6 @@ function makePanelCollapsible(panelEl, storageKey) {
   });
 }
 
-// Enable search initially
 setNormalSearchEnabled(true);
 
 // ============================================================================
@@ -1149,9 +1161,11 @@ function getCheckedValues(selector) {
 function applyFilters() {
   const rawTypes = getCheckedValues(".f-type");
   const rawCountries = getCheckedValues(".f-country");
+  const rawRisk = getCheckedValues(".f-risk");
 
   const activeTypes = rawTypes.map((t) => TYPE_CODE_MAP[t]).filter(Boolean);
   const activeCountries = rawCountries.map((c) => COUNTRY_CODE_MAP[c]).filter(Boolean);
+  const activeRisk = rawRisk;
 
   const entities = MODE === "KESSLER" ? kesslerDS.entities.values : normalDS.entities.values;
 
@@ -1167,7 +1181,8 @@ function applyFilters() {
     const passes =
       activeTypes.includes(props.type) &&
       activeCountries.includes(props.country) &&
-      activeAltBins.has(props.altBin);
+      activeAltBins.has(props.altBin) &&
+      activeRisk.includes(props.riskLevel ?? "Low");
 
     if (passes && shownCount < maxVisibleObjects) {
       e.show = true;
@@ -1196,7 +1211,11 @@ panel.addEventListener("change", (ev) => {
   const t = ev.target;
   if (!t) return;
 
-  if (t.classList.contains("f-type") || t.classList.contains("f-country")) {
+  if (
+    t.classList.contains("f-type") ||
+    t.classList.contains("f-country") ||
+    t.classList.contains("f-risk")
+  ) {
     applyFilters();
   }
 });
@@ -1231,9 +1250,7 @@ function findNormalEntity(query) {
 function focusOnNormalEntity(entity) {
   if (!entity || MODE !== "NORMAL") return;
 
-  // Ensure visible even if filters hid it
   entity.show = true;
-
   viewer.selectedEntity = entity;
 
   viewer.flyTo(entity, {
@@ -1329,14 +1346,12 @@ function initPopupTabs() {
   const panels = Array.from(popup.querySelectorAll(".popup-tabpanel"));
 
   function activate(tabId) {
-    // tabs
     tabs.forEach(t => {
       const on = t.dataset.tab === tabId;
       t.classList.toggle("active", on);
       t.setAttribute("aria-selected", on ? "true" : "false");
     });
 
-    // panels
     panels.forEach(p => p.classList.toggle("active", p.id === tabId));
   }
 
@@ -1344,7 +1359,6 @@ function initPopupTabs() {
     t.addEventListener("click", () => activate(t.dataset.tab));
   });
 
-  // default to Description
   if (tabs[0]) activate(tabs[0].dataset.tab);
 }
 
@@ -1414,7 +1428,6 @@ function createAltitudeLegend() {
   });
 }
 
-// Show/hide box with simulation settings
 function showSimSettingsUI() {
   simSettingsBox.style.display = "block";
   addObjectBox.style.display = "block";
@@ -1426,7 +1439,6 @@ function hideSimSettingsUI() {
 }
 
 function getSimSettings() {
-  // Read and validate
   const threshold = Number.parseInt(simThresholdEl.value, 10);
   const lengthSec = Number.parseInt(simLengthEl.value, 10);
   const stepSec = Number.parseInt(simStepEl.value, 10);
@@ -1456,7 +1468,6 @@ function buildKesslerStreamUrl() {
   const base = "http://localhost:3000/api/v1/simulation/stream";
   const s = getSimSettings();
 
-  // If invalid, still return base (caller can handle)
   if (!s.ok) return { ok: false, error: s.error, url: base };
 
   const params = new URLSearchParams();
@@ -1466,22 +1477,20 @@ function buildKesslerStreamUrl() {
 
   return { ok: true, url: `${base}?${params.toString()}` };
 }
+
 // ============================================================================
-// 12) BOOT / STARTUP (ONE PLACE)
+// 12) BOOT / STARTUP
 // ============================================================================
 
 window.addEventListener("load", async () => {
-  // Show project info on load
   initPopupTabs();
   openPopup();
 
-  // Build legend + load normal data
   createAltitudeLegend();
   syncLegendHeightVar();
   window.addEventListener("resize", syncLegendHeightVar);
-  await loadAndRenderTrajectories();
 
-  // Initial filter pass
+  await loadAndRenderTrajectories();
   applyFilters();
 });
 
@@ -1496,7 +1505,6 @@ simApplyBtn.addEventListener("click", async () => {
   simErrEl.style.display = "none";
   simErrEl.textContent = "";
 
-  // Restart stream with new params
   if (MODE === "KESSLER") {
     try {
       if (KESSLER_ABORT) KESSLER_ABORT.abort();
