@@ -138,6 +138,32 @@ function kmEciToCartographicMeters(posKm) {
   return { cart, carto };
 }
 
+function cartesianToBucketKey(cartesian) {
+  const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  if (!carto) return "unknown";
+
+  const latDeg = Cesium.Math.toDegrees(carto.latitude);
+  const lonDeg = Cesium.Math.toDegrees(carto.longitude);
+  const altKm = carto.height / 1000;
+
+  const latBucket = Math.floor((latDeg + 90) / 10);   // 10-degree buckets
+  const lonBucket = Math.floor((lonDeg + 180) / 10);  // 10-degree buckets
+  const altBucket = Math.floor(altKm / 200);          // 200-km buckets
+
+  return `${latBucket}:${lonBucket}:${altBucket}`;
+}
+
+function congestionToLevel(score) {
+  if (score >= 20) return "High";
+  if (score >= 8) return "Medium";
+  return "Low";
+}
+
+function congestionColor(score) {
+  if (score >= 20) return Cesium.Color.RED;
+  if (score >= 8) return Cesium.Color.ORANGE;
+  return Cesium.Color.LIME;
+}
 // ============================================================================
 // 3) DATA SOURCES + APP MODE STATE
 // ============================================================================
@@ -577,7 +603,8 @@ async function startKesslerStreamFromAPI() {
               } finally {
                 kesslerDS.entities.resumeEvents();
               }
-
+              
+              computeNormalModeCongestionAndRisk();
               applyFilters();
 
               if (!hasRenderedFirstFrame) {
