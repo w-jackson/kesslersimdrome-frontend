@@ -17,6 +17,7 @@
 
 
 let simulation_object_to_add = [];
+let use_local = false;
 
 const simulationState = {
   loading: {
@@ -198,12 +199,18 @@ async function loadAndRenderTrajectories() {
       return;
     }
 
+    const satellites_url = use_local ? `http://localhost:3000/api/v1/satellites` : `https://api.kesslersimdrome.org/api/v1/satellites`;
+
     console.time("fetch");
-    const res = await fetch("http://localhost:3000/api/v1/satellites");
+    const res = await fetch(satellites_url);
     console.timeEnd("fetch");
 
+    console.time("text-read");
+    const text = await res.text();
+    console.timeEnd("text-read");
+
     console.time("json-parse");
-    const data = await res.json();
+    const data = JSON.parse(text);
     console.timeEnd("json-parse");
 
     console.log("Loaded trajectory data:", data);
@@ -450,9 +457,9 @@ async function startKesslerStreamFromAPI() {
 
   simulation_object_to_add = [];
 
-  const url = `http://localhost:3000/api/v1/simulation/stream?${params.toString()}`;
+  const simulation_url = use_local ? `http://localhost:3000/api/v1/simulation/stream?${params.toString()}` : `https://api.kesslersimdrome.org/api/v1/simulation/stream?${params.toString()}`;
 
-  const res = await fetch(url, {
+  const res = await fetch(simulation_url, {
     signal: KESSLER_ABORT.signal,
     headers: { Accept: "application/x-ndjson" }
   });
