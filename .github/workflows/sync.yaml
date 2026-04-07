@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: Clone GitLab repo
         run: |
-          git clone -b will-deploy --single-branch https://gitlab-ci-token:${{ secrets.GITLAB_TOKEN }}@capstone.cs.utah.edu/kesslersimdrome/kesslersimdrome.git source-repo
+          git clone https://gitlab-ci-token:${{ secrets.GITLAB_TOKEN }}@capstone.cs.utah.edu/kesslersimdrome/kesslersimdrome.git source-repo
       
       - name: Split and push frontend branch
         run: |
