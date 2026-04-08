@@ -826,6 +826,132 @@ ksdButton.title = "Simulate Kessler Syndrome";
 ksdButton.innerHTML = `<img src="assets/ksd_logo.png" class="ksd-logo-icon">`;
 toolbar.appendChild(ksdButton);
 
+// Chat button
+const chatButton = document.createElement("button");
+chatButton.className = "cesium-button cesium-toolbar-button";
+chatButton.title = "Open AI Chat";
+chatButton.textContent = "Chat";
+toolbar.appendChild(chatButton);
+
+// Chat popup
+const chatPopup = document.createElement("div");
+chatPopup.className = "ksd-chat-popup";
+chatPopup.style.display = "none";
+chatPopup.innerHTML = `
+  <div class="ksd-chat-header">
+    <h4>Kessler Chat</h4>
+    <button id="ksd-chat-close" type="button">×</button>
+  </div>
+
+  <div id="ksd-chat-messages" class="ksd-chat-messages">
+    <div class="ksd-chat-message assistant">Hi! Ask me anything about the simulation.</div>
+  </div>
+
+  <div class="ksd-chat-input-row">
+    <textarea id="ksd-chat-input" placeholder="Type your message..."></textarea>
+    <button id="ksd-chat-send" class="cesium-button" type="button">Send</button>
+  </div>
+`;
+viewer.container.appendChild(chatPopup);
+
+const chatMessages = chatPopup.querySelector("#ksd-chat-messages");
+const chatInput = chatPopup.querySelector("#ksd-chat-input");
+const chatSend = chatPopup.querySelector("#ksd-chat-send");
+const chatClose = chatPopup.querySelector("#ksd-chat-close");
+
+const CHAT_API_URL = "http://localhost:3000/api/v1/chat";
+const CHAT_SESSION_KEY = "ksd_chat_session_id";
+
+function getChatSessionId() {
+  let sessionId = localStorage.getItem(CHAT_SESSION_KEY);
+  if (!sessionId) {
+    sessionId = "session-" + Math.random().toString(36).slice(2) + "-" + Date.now();
+    localStorage.setItem(CHAT_SESSION_KEY, sessionId);
+  }
+  return sessionId;
+}
+
+function appendChatMessage(role, text) {
+  const msg = document.createElement("div");
+  msg.className = `ksd-chat-message ${role}`;
+  msg.textContent = text;
+  chatMessages.appendChild(msg);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function openChatPopup() {
+  chatPopup.style.display = "flex";
+  chatInput.focus();
+}
+
+function closeChatPopup() {
+  chatPopup.style.display = "none";
+}
+
+async function sendChatMessage() {
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  appendChatMessage("user", text);
+  chatInput.value = "";
+
+  const thinking = document.createElement("div");
+  thinking.className = "ksd-chat-message assistant";
+  thinking.textContent = "Thinking...";
+  chatMessages.appendChild(thinking);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
+    const response = await fetch(CHAT_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: text,
+        session_id: getChatSessionId()
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    thinking.remove();
+
+    const reply =
+      data.reply ||
+      data.response ||
+      data.message ||
+      data.answer ||
+      "No response received from server.";
+
+    appendChatMessage("assistant", reply);
+  } catch (err) {
+    console.error("Chat request failed:", err);
+    thinking.remove();
+    appendChatMessage("assistant", "Sorry, I couldn't reach the chat server.");
+  }
+}
+
+chatButton.addEventListener("click", () => {
+  if (chatPopup.style.display === "none") openChatPopup();
+  else closeChatPopup();
+});
+
+chatClose.addEventListener("click", closeChatPopup);
+chatSend.addEventListener("click", sendChatMessage);
+
+chatInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+
+// Filter panel
 const panel = document.createElement("div");
 panel.className = "ksd-filter-panel";
 panel.innerHTML = `
