@@ -17,7 +17,7 @@
 
 let simulation_object_to_add = [];
 let useCongestionColors = false;
-let use_local = false;
+let use_local = true;
 
 const simulationState = {
   loading: {
@@ -1034,7 +1034,7 @@ simSettingsBox.innerHTML = `
 
     <label>
       Break-off Object Count
-      <input id="ksd-break-off-count" type="number" min="4" step="4" value="16" />
+      <input id="ksd-break-off-count" type="number" min="4" step="4" value="48" />
     </label>
 
     <label>
