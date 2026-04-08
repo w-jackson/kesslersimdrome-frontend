@@ -17,6 +17,19 @@
 
 let simulation_object_to_add = [];
 let useCongestionColors = false;
+let use_local = false;
+
+const simulationState = {
+  loading: {
+    loadedObjects: 0,
+    totalObjects: 0
+  },
+
+  meta: null,
+
+  steps: {},   // stepIndex -> objects
+  finished: null
+};
 
 // ============================================================================
 // 1) CESIUM / VIEWER SETUP
@@ -247,12 +260,18 @@ async function loadAndRenderTrajectories() {
       return;
     }
 
+    const satellites_url = use_local ? `http://localhost:3000/api/v1/satellites` : `https://api.kesslersimdrome.org/api/v1/satellites`;
+
     console.time("fetch");
-    const res = await fetch("http://localhost:3000/api/v1/satellites");
+    const res = await fetch(satellites_url);
     console.timeEnd("fetch");
 
+    console.time("text-read");
+    const text = await res.text();
+    console.timeEnd("text-read");
+
     console.time("json-parse");
-    const data = await res.json();
+    const data = JSON.parse(text);
     console.timeEnd("json-parse");
 
     console.log("Loaded trajectory data:", data);
@@ -444,6 +463,7 @@ function openKesslerScreen() {
 }
 
 async function startKesslerStreamFromAPI() {
+  saveBtn.disabled = true;
   addObjectBox.querySelector("#ksd-add-object-btn").click();
   simSettingsBox.querySelector(".ksd-panel-toggle").click();
 
@@ -480,9 +500,9 @@ async function startKesslerStreamFromAPI() {
 
   simulation_object_to_add = [];
 
-  const url = `http://localhost:3000/api/v1/simulation/stream?${params.toString()}`;
+  const simulation_url = use_local ? `http://localhost:3000/api/v1/simulation/stream?${params.toString()}` : `https://api.kesslersimdrome.org/api/v1/simulation/stream?${params.toString()}`;
 
-  const res = await fetch(url, {
+  const res = await fetch(simulation_url, {
     signal: KESSLER_ABORT.signal,
     headers: { Accept: "application/x-ndjson" }
   });
@@ -551,6 +571,8 @@ async function startKesslerStreamFromAPI() {
             const loaded = msg.loaded_objects ?? 0;
             const total = msg.total_objects ?? 0;
             const pct = total > 0 ? loaded / total : 0;
+            simulationState.loading.loadedObjects = loaded;
+            simulationState.loading.totalObjects = total;
             if (!hasRenderedFirstFrame) {
               showLoadingUI();
               updateLoadingUI(pct, `Loading objects: ${loaded}/${total}`);
@@ -560,7 +582,7 @@ async function startKesslerStreamFromAPI() {
 
           case "step_meta": {
             lastMeta = msg;
-
+            simulationState.meta = msg;
             updateSimulationInfo({
               totalObjects: msg.object_count,
               totalCollisions: msg.total_collision_count,
@@ -629,6 +651,11 @@ async function startKesslerStreamFromAPI() {
                 hideLoadingUI();
               }
             }
+            if (!simulationState.steps[stepIndex]) {
+              simulationState.steps[stepIndex] = [];
+            }
+
+            simulationState.steps[stepIndex].push(...objects);
             break;
           }
 
@@ -640,7 +667,9 @@ async function startKesslerStreamFromAPI() {
             });
             applyFilters();
             hideLoadingUI();
+            saveBtn.disabled = false;
             console.log("Kessler finished:", msg);
+            simulationState.finished = msg;
             break;
           }
 
@@ -900,6 +929,111 @@ const simBreakOffCount = simSettingsBox.querySelector("#ksd-break-off-count");
 const simApplyBtn = simSettingsBox.querySelector("#ksd-set-apply");
 const simErrEl = simSettingsBox.querySelector("#ksd-set-error");
 
+// Save state button
+const saveBtn = document.createElement("button");
+saveBtn.textContent = "Save Simulation State";
+saveBtn.style.position = "absolute";
+saveBtn.style.bottom = "100px"; 
+saveBtn.style.right = "50px";
+saveBtn.style.zIndex = "1000";
+saveBtn.className = "cesium-button";
+saveBtn.style.display = "none";
+saveBtn.disabled = true;
+
+document.body.appendChild(saveBtn);
+
+saveBtn.addEventListener("click", () => {
+
+  const textContent = JSON.stringify(simulationState, null, 2);
+
+  const blob = new Blob([textContent], { type: "text/plain;charset=utf-8;" });
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "simulation_state.txt";
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+  saveBtn.disabled = true;
+});
+
+// Add upload CSV button.
+const uploadBtn = document.createElement("button");
+uploadBtn.textContent = "Upload CSV of Objects";
+uploadBtn.style.position = "absolute";
+uploadBtn.style.bottom = "50px";
+uploadBtn.style.right = "50px";
+uploadBtn.style.zIndex = "1000";
+uploadBtn.className = "cesium-button";
+uploadBtn.style.display = "none"; 
+
+document.body.appendChild(uploadBtn); 
+
+// hidden file input
+const csvInput = document.createElement("input");
+csvInput.type = "file";
+csvInput.accept = ".csv";
+csvInput.style.display = "none";
+
+document.body.appendChild(csvInput);
+
+uploadBtn.addEventListener("click", () => {
+  csvInput.click();
+});
+
+csvInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = function (e) {
+    const csvText = e.target.result;
+    try {
+      parseUploadCSV(csvText);
+      alert("CSV was parsed successfully!");
+    } catch(err) {
+      alert("Failed to parse CSV: " + err.message);
+    }
+  };
+
+  reader.readAsText(file);
+});
+
+function parseUploadCSV(text) {
+  const rows = text.trim().split(/\r?\n/);
+
+  if (rows.length < 2) {
+    throw new Error("CSV must contain a header and at least one row.");
+  }
+
+  for (let i = 1; i < rows.length; i++) {
+    const cols = rows[i].split(",");
+
+    if (cols.length < 6) {
+      throw new Error(`Row ${i + 1} does not contain 6 columns.`);
+    }
+
+    const [lon, lat, alt, vx, vy, vz] = cols.map(Number);
+
+    if ([lon, lat, alt, vx, vy, vz].some(v => Number.isNaN(v))) {
+      throw new Error(`Row ${i + 1} contains invalid numeric values.`);
+    }
+
+    simulation_object_to_add.push([
+      [lat, lon, alt],
+      [vx, vy, vz]
+    ]);
+  }
+}
+
+
+// Add Object Box (KESSLER mode only)
 const addObjectBox = document.createElement("div");
 addObjectBox.className = "ksd-add-object";
 addObjectBox.innerHTML = `
@@ -1431,11 +1565,15 @@ function createAltitudeLegend() {
 function showSimSettingsUI() {
   simSettingsBox.style.display = "block";
   addObjectBox.style.display = "block";
+  uploadBtn.style.display = "block";
+  saveBtn.style.display = "block";
 }
 
 function hideSimSettingsUI() {
   simSettingsBox.style.display = "none";
   addObjectBox.style.display = "none";
+  uploadBtn.style.display = "none"
+  saveBtn.style.display = "none"
 }
 
 function getSimSettings() {
