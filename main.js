@@ -15,8 +15,6 @@
  *  - congestion color toggle
  */
 
-const { useLayoutEffect } = require("react");
-
 let simulation_object_to_add = [];
 let useCongestionColors = false;
 let use_local = false;
