@@ -15,6 +15,8 @@
  *  - congestion color toggle
  */
 
+const { useLayoutEffect } = require("react");
+
 let simulation_object_to_add = [];
 let useCongestionColors = false;
 let use_local = false;
@@ -859,7 +861,7 @@ const chatInput = chatPopup.querySelector("#ksd-chat-input");
 const chatSend = chatPopup.querySelector("#ksd-chat-send");
 const chatClose = chatPopup.querySelector("#ksd-chat-close");
 
-const CHAT_API_URL = "http://localhost:3000/api/v1/chat";
+const CHAT_API_URL = use_local ? "http://localhost:3000/api/v1/chat" : "https://api.kesslersimdrome.org:3000/api/v1/chat";
 const CHAT_SESSION_KEY = "ksd_chat_session_id";
 
 function getChatSessionId() {
@@ -1729,7 +1731,7 @@ function getSimSettings() {
 }
 
 function buildKesslerStreamUrl() {
-  const base = "http://localhost:3000/api/v1/simulation/stream";
+  const base = use_local ? "http://localhost:3000/api/v1/simulation/stream" : "https://api.kesslersimdrome.org:3000/api/v1/simulation/stream";
   const s = getSimSettings();
 
   if (!s.ok) return { ok: false, error: s.error, url: base };
