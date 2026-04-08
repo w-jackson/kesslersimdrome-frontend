@@ -458,6 +458,7 @@ function openKesslerScreen() {
 
   infoBox.style.display = "block";
   showSimSettingsUI();
+  syncAnalysisControlsForMode();
 
   KESSLER_ABORT = new AbortController();
 }
@@ -759,6 +760,7 @@ async function returnToNormalMode() {
   showTimeUI();
   infoBox.style.display = "none";
   hideSimSettingsUI();
+  syncAnalysisControlsForMode();
   applyFilters();
 }
 
@@ -986,18 +988,20 @@ panel.innerHTML = `
     <label><input type="checkbox" class="f-country" value="Other" checked>Other</label>
   </div>
 
-  <div class="ksd-divider"></div>
+  <div id="ksd-advanced-analysis-filters">
+    <div class="ksd-divider"></div>
 
-  <div class="ksd-filter-row"><strong>Risk</strong>
-    <label><input type="checkbox" class="f-risk" value="Low" checked>Low</label>
-    <label><input type="checkbox" class="f-risk" value="Medium" checked>Medium</label>
-    <label><input type="checkbox" class="f-risk" value="High" checked>High</label>
-  </div>
+    <div class="ksd-filter-row"><strong>Risk</strong>
+      <label><input type="checkbox" class="f-risk" value="Low" checked>Low</label>
+      <label><input type="checkbox" class="f-risk" value="Medium" checked>Medium</label>
+      <label><input type="checkbox" class="f-risk" value="High" checked>High</label>
+    </div>
 
-  <div class="ksd-divider"></div>
+    <div class="ksd-divider"></div>
 
-  <div class="ksd-filter-row">
-    <label><input type="checkbox" id="ksd-congestion-view">Congestion View</label>
+    <div class="ksd-filter-row">
+      <label><input type="checkbox" id="ksd-congestion-view">Congestion View</label>
+    </div>
   </div>
 
   <div class="ksd-divider"></div>
@@ -1276,6 +1280,24 @@ const slider = document.getElementById("ksd-limit-slider");
 const sliderValueEl = document.getElementById("ksd-slider-value");
 const lockCheckbox = document.getElementById("ksd-lock-max");
 const congestionViewCheckbox = document.getElementById("ksd-congestion-view");
+const advancedAnalysisFilters = document.getElementById("ksd-advanced-analysis-filters");
+
+function syncAnalysisControlsForMode() {
+  const showAnalysis = MODE === "NORMAL";
+
+  if (advancedAnalysisFilters) {
+    advancedAnalysisFilters.style.display = showAnalysis ? "" : "none";
+  }
+
+  if (!showAnalysis) {
+    useCongestionColors = false;
+    if (congestionViewCheckbox) congestionViewCheckbox.checked = false;
+  }
+
+  if (viewer.scene && typeof viewer.scene.requestRender === "function") {
+    viewer.scene.requestRender();
+  }
+}
 
 let maxVisibleObjects = Number(slider.value);
 let lockSliderToMax = false;
@@ -1764,6 +1786,7 @@ window.addEventListener("load", async () => {
   window.addEventListener("resize", syncLegendHeightVar);
 
   await loadAndRenderTrajectories();
+  syncAnalysisControlsForMode();
   applyFilters();
 });
 
