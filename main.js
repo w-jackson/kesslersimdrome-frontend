@@ -915,15 +915,6 @@ async function sendChatMessage() {
       })
     });
 
-    if (response.status === 429) {
-      thinking.remove();
-      appendChatMessage(
-        "assistant",
-        data.answer || "You have hit the chat limit. Please try again later."
-      );
-      return;
-    }
-
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
