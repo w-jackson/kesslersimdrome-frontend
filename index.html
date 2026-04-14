@@ -40,17 +40,17 @@
 
     <!-- Tabs -->
     <div class="popup-tabs" role="tablist" aria-label="Info Tabs">
-      <button class="popup-tab active" data-tab="tab-desc" role="tab" aria-selected="true">Description</button>
-      <button class="popup-tab" data-tab="tab-how" role="tab" aria-selected="false">How to Use</button>
+      <button class="popup-tab active" data-tab="tab-about" role="tab" aria-selected="true">About</button>
+      <button class="popup-tab" data-tab="tab-tutorial" role="tab" aria-selected="false">Tutorial</button>
       <button class="popup-tab" data-tab="tab-terms" role="tab" aria-selected="false">Terminology</button>
       <button class="popup-tab" data-tab="tab-sources" role="tab" aria-selected="false">Sources</button>
-      <button class="popup-tab" data-tab="tab-authors" role="tab" aria-selected="false">Authors</button>
+      <button class="popup-tab" data-tab="tab-members" role="tab" aria-selected="false">Team Members</button>
     </div>
 
     <div class="popup-content">
-      <!-- Description -->
-      <section id="tab-desc" class="popup-tabpanel active" role="tabpanel">
-        <h3>Project Description</h3>
+      <!-- About -->
+      <section id="tab-about" class="popup-tabpanel active" role="tabpanel">
+        <h3>About</h3>
         <p>
           KesslerSimDrome is an interactive simulation platform designed to visualize and analyze low-Earth orbit (LEO) space debris.
           It addresses the growing concern of space debris and the Kessler Syndrome, where cascading collisions could render certain orbits unusable. Current
@@ -66,13 +66,19 @@
           This project serves as both an educational tool and a platform for raising awareness about the importance of space sustainability and debris mitigation efforts.
           Target users for this project include students, educators, space enthusiasts, and the general public. 
         </p>
+        <p>
+          It was build using CesiumJS, Python, Rust, and PostgreSQL and is hosted on AWS and GitHub Pages.
+        </p>
       </section>
 
-      <!-- How to Use -->
-      <section id="tab-how" class="popup-tabpanel" role="tabpanel">
-        <h3>How to Use</h3>
+      <!-- Tutorial -->
+      <section id="tab-tutorial" class="popup-tabpanel" role="tabpanel">
+        <h3>Full Tutorial</h3>
+        <a href="https://youtu.be/tzDALBdwcJc" target="_blank">youtu.be/tzDALBdwcJc</a>
+
+        <h3>Quick Reference</h3>
         <ul>
- <li><b>Move camera:</b> Click and drag to rotate the view, scroll to zoom in/out, right-click and drag to pan.</li>
+          <li><b>Move camera:</b> Click and drag to rotate the view, scroll to zoom in/out, right-click and drag to pan.</li>
           <li><b>Time controls:</b> Use the timeline/animation widgets to scrub orbit time.</li>
           <li><b>Change speed:</b> Drag the speed slider (bottom-left). Double-click the clock to type an exact speed.</li>
           <li><b>Filters:</b> Click the filter icon in the toolbar to show/hide objects by <b>Type</b>, and <b>Country</b></li>
@@ -104,11 +110,79 @@
         <p><b>NASA Models:</b> Used several public 3D models. <i>https://science.nasa.gov/3d-resources/</i></p>
       </section>
 
-      <!-- Authors -->
-      <section id="tab-authors" class="popup-tabpanel" role="tabpanel">
-        <h3>Authors</h3>
-        <p>Rishab Dixit, Roy Hoang, Samuel Dutson, Will Jackson</p>
-      </section>
+      <!--Team Members-->
+      <section id="tab-members" class="popup-tabpanel" role="tabpanel">
+      <h3>Team Members</h3>
+
+      <div class="team-list">
+
+        <!-- Member 1 -->
+        <div class="team-member">
+          <img src="assets/rishab.jpg" alt="Rishab Dixit" class="team-img">
+          <h4>Rishab Dixit</h4>
+          <p>
+            Rishab is a senior at the University of Utah pursuing a Bachelor of Science in Computer Science. 
+            He is primarily interested in designing and building hardware for machine learning, and he plans to continue his studies at Texas A&M University in a master’s program in Computer Science and Engineering. 
+            His contributions to KesslerSimDrome include API development, chatbot integration, and supporting teammates across different parts of the project. 
+            These contributions aligned with his interest in building efficient and reliable systems that improve how users interact with software. 
+            Outside of school, he enjoys playing video games and badminton.
+          </p>
+          <p>
+            📧 <a href="mailto:u1405619@utah.edu">u1405619@utah.edu</a><br>
+            🔗 <a href="https://linkedin.com/in/rishab-dixit" target="_blank">LinkedIn</a>
+          </p>
+        </div>
+
+        <!-- Member 2 -->
+        <div class="team-member">
+          <img src="assets/Roy.jpg" alt="Roy Hoang" class="team-img">
+          <h4>Phuc "Roy" Hoang</h4>
+          <p> 
+            Roy is a senior at the University of Utah pursuing a Bachelor of Science in Computer Science. 
+            He is interested in software development, system performance, and building interactive applications. 
+            His contributions to KesslerSimDrome include frontend development using CesiumJS, implementing real-time satellite visualization, 
+            optimizing rendering performance, and developing features such as filtering and simulation controls. 
+            These contributions align with his goal of creating efficient and responsive user experiences in complex systems.
+            Outside of school, he enjoys gaming, working on personal projects, and exploring new technologies.</p>
+          <p>
+            📧 <a href="mailto:u1503943@utah.edu">u1503943@utah.edu</a><br>
+            🔗 <a href="https://www.linkedin.com/in/phuc-hoang-6574152aa/" target="_blank">LinkedIn</a>
+          </p>
+        </div>
+
+        <!-- Member 3 -->
+        <div class="team-member">
+          <img src="assets/sam.JPG" alt="Samuel Dutson" class="team-img">
+          <h4>Samuel Dutson</h4>
+          <p>Sam is a computer science student at the University of Utah. He loves running, hiking, and spending time outdoors.</p>
+          <p>
+            📧 <a href="mailto:sdutson222@gmail.com">sdutson222@gmail.com</a>
+          </p>
+        </div>
+
+        <!-- Member 4 -->
+        <div class="team-member">
+          <img src="assets/will.jpg" alt="Will Jackson" class="team-img">
+          <h4>Will Jackson</h4>
+          <p>
+            Will is a senior at the University of Utah persuing a Bachelors of Science in Computer Science with a minor in French. 
+            He is primarily interested in Web Developement and Dev Ops, and hopes to work in one of these areas. His contributions to 
+            KesslerSimDrome include API work, hosting setup, and CI/CD pipeline creation. These contributions aligned with his goal 
+            of creating key project infrastructure enabling the team to easily deploy new features to the application.
+          </p>
+
+          <p>
+            Outside of school he enjoys watching and playing ice hockey, hiking, and working on personal projects. 
+          </p>
+
+          <p>
+            📧 <a href="mailto:u0710534@utah.edu">u0710534@utah.edu</a><br>
+            🔗 <a href="https://www.linkedin.com/in/will-jackson-828457253/" target="_blank">LinkedIn</a>
+          </p>
+        </div>
+
+      </div>
+    </section>
 
     </div>
   </div>

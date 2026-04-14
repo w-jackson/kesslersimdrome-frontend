@@ -17,7 +17,7 @@
 
 let simulation_object_to_add = [];
 let useCongestionColors = false;
-let use_local = false;
+let use_local = true;
 
 const simulationState = {
   loading: {

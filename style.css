@@ -462,3 +462,32 @@ html, body, #cesiumContainer {
 #ksd-chat-input::placeholder {
   color: #ccc;
 }
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.team-member {
+  text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ccc;
+}
+
+.team-img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin-bottom: 10px;
+}
+
+a {
+  color: lightskyblue;
+  text-decoration: none; /* optional: removes underline */
+}
+
+a:hover {
+  color: rgb(176, 225, 255); /* optional: light gray on hover */
+}
